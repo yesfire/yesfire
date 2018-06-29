@@ -467,10 +467,17 @@ getentline(struct entry ent[NCOLS], int index, int j)
             }
         }
         else {
-            delta = get_delta(i);
-            ent[i] = dents[i][j+delta];
-
-        }
+            if (j<ndents[i]){
+                delta = get_delta(i);
+                ent[i] = dents[i][j+delta];
+            }
+            else {
+                ent[i].name[0]='\0';
+                ent[i].mode=0;
+                ent[i].t=0;
+                ent[i].dummy=1;
+            }
+            }
     }
 
     return;
