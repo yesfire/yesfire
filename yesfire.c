@@ -732,6 +732,7 @@ browse(char *ipath[NCOLS], char *ifilter)
     int numcode = 0;
 	char path[NCOLS][PATH_MAX], oldpath[NCOLS][PATH_MAX], newpath[NCOLS][PATH_MAX];
 	char fltr[LINE_MAX];
+	char fastdir[PATH_MAX];
 	char *bin, *dir, *tmp, *run, *env;
 	struct stat sb;
 	regex_t re;
@@ -971,14 +972,14 @@ nochange:
 
         case SEL_FASTDIR:
             numcode = nextkey.keyp - '0';
-
-            strlcpy(tmp,fast_dirs[numcode], sizeof(tmp));
-			if (tmp == NULL) {
+			
+            strlcpy(fastdir,fast_dirs[numcode], sizeof(tmp));
+			if (fastdir == NULL) {
 				clearprompt();
 				goto nochange;
 			}
 
-	    	mkpath(path[curcol], tmp, newpath[curcol], sizeof(newpath[curcol]));
+	    	mkpath(path[curcol], fastdir, newpath[curcol], sizeof(newpath[curcol]));
 			if (canopendir(newpath[curcol]) == 0) {
 				printwarn();
 				goto nochange;
