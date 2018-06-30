@@ -911,6 +911,28 @@ nochange:
 
             populate_current(path,oldpath,fltr);
 			goto begin;
+        case SEL_FASTDIR:
+            numcode = nextkey.keyp - '0';
+			if ((numcode >=0) && (numcode <10)) {
+				strlcpy(fastdir,fast_dirs[numcode], sizeof(tmp));
+				if (fastdir == NULL) {
+					clearprompt();
+					goto nochange;
+				}
+
+				mkpath(path[curcol], fastdir, newpath[curcol], sizeof(newpath[curcol]));
+				if (canopendir(newpath[curcol]) == 0) {
+					printwarn();
+					goto nochange;
+				}
+				strlcpy(path[curcol], newpath[curcol], sizeof(path[curcol]));
+				/* Reset filter */
+				strlcpy(fltr, ifilter, sizeof(fltr))
+				DPRINTF_S(path[curcol]);
+				populate_current(path,oldpath,fltr);
+			}
+			goto begin;
+            break;
 		case SEL_CDHOME:
 			tmp = getenv("HOME");
 			if (tmp == NULL) {
@@ -970,29 +992,8 @@ nochange:
             (curcol == 0) ? (curcol = NCOLS - 1): (curcol--) ;
             break;
 
-        case SEL_FASTDIR:
-            numcode = nextkey.keyp - '0';
-			
-            strlcpy(fastdir,fast_dirs[numcode], sizeof(tmp));
-			if (fastdir == NULL) {
-				clearprompt();
-				goto nochange;
-			}
-
-	    	mkpath(path[curcol], fastdir, newpath[curcol], sizeof(newpath[curcol]));
-			if (canopendir(newpath[curcol]) == 0) {
-				printwarn();
-				goto nochange;
-			}
-			strlcpy(path[curcol], newpath[curcol], sizeof(path[curcol]));
-			/* Reset filter */
-			strlcpy(fltr, ifilter, sizeof(fltr))
-			DPRINTF_S(path[curcol]);
-
-            populate_current(path,oldpath,fltr);
-
-			goto begin;
-            break;
+		default: 
+		    break;
 		}
 		/* Screensaver */
 		if (idletimeout != 0 && idle == idletimeout) {
