@@ -4,7 +4,7 @@
 
 #define CWD   "You are here: "
 #define CURSR " -> "
-#define EMPTY "   "
+#define EMPTY "    "
 
 int mtimeorder  = 1; /* Set to 1 to sort by time modified */
 int idletimeout = 0; /* Screensaver timeout in seconds, 0 to disable */

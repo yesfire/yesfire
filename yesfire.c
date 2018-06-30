@@ -298,8 +298,8 @@ initcurses(void)
 			fprintf(stderr, "failed to initialize curses\n");
 		exit(1);
 	}
-	if (COLS < 80) {fprintf(stderr, "minimum 80 cols terminal please, its 4 panel file viewer\n"); exit(1);}
-	if (COLS/NCOLS < 20) {fprintf(stderr, "minimum 20 cols per panel please.\n"); exit(1);}
+	if (COLS < 80) {fprintf(stderr, "minimum 80 cols terminal please, its 4 panel file viewer\n"); endwin(); exit(1);}
+	if (COLS/NCOLS < 20) {fprintf(stderr, "minimum 20 cols per panel please.\n"); endwin(); exit(1);}
 
 	cbreak();
 	noecho();
@@ -494,7 +494,7 @@ void
 printentline(struct entry ent[NCOLS], int ind)
 {
 	char name[PATH_MAX];
-	unsigned int maxlen = COLS/NCOLS - strlen(CURSR) - 2;
+	unsigned int maxlen = COLS/NCOLS - strlen(CURSR) - 1;
     int i = 0;
     for (i=0;i<PATH_MAX;++i) name[i]=0;
     int j = 0;
@@ -526,11 +526,11 @@ printentline(struct entry ent[NCOLS], int ind)
         if (strlen(name) > maxlen)
             name[maxlen] = '\0';
 
-        char line[2*maxlen]; for (j=0;j<maxlen;++j) line[j]=0;
+        char line[2*maxlen]; for (j=0;j<2*maxlen;++j) line[j]=0;
         char lformat[10]; for (j=0;j<10;++j) lformat[j]=0;
         char align = 0; (i % 2 == 1) ? (align = '+') : (align = '-');
 
-        sprintf(lformat, "%c%c%ds", '%', align, COLS/NCOLS - 1);
+        sprintf(lformat, "%c%c%ds", '%', align, COLS/NCOLS - 2);
 
         if (ent[i].dummy==0) {
             if (cm == 0)
@@ -540,13 +540,14 @@ printentline(struct entry ent[NCOLS], int ind)
 
 
             if (ind+get_delta(i)==cur[i] && i==curcol) attron(A_STANDOUT);
+            line[maxlen]='\0';
             printw(lformat, line);
         }
         else if (ent[i].dummy==1){
             printw(lformat, " ");
         }
-        if (i==NCOLS - 1) printw ("\n");
         attroff(A_STANDOUT);
+        if (i==NCOLS - 1) printw ("\n");
     }
 }
 
@@ -847,7 +848,7 @@ nochange:
 			}
 		case SEL_FLTR:
 			/* Read filter */
-			printprompt("filter: ");
+			printprompt("filter(aka regex): ");
 			tmp = readln();
 			if (tmp == NULL)
 				tmp = ifilter;
