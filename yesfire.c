@@ -1010,7 +1010,7 @@ nochange:
 void
 version()
 {
-    fprintf(stdout, "Yesfire. Some men just want to see this files OPENED edition.\n");
+    fprintf(stdout, "Yesfire 42.0: Some men just want to watch the fil(r)es OPENED.\n");
     exit(1);
 }
 
