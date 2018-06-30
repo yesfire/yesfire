@@ -494,7 +494,7 @@ void
 printentline(struct entry ent[NCOLS], int ind)
 {
 	char name[PATH_MAX];
-	unsigned int maxlen = COLS/NCOLS - strlen(CURSR) - 1;
+	unsigned int maxlen = COLS/NCOLS - strlen(CURSR) - 2;
     int i = 0;
     for (i=0;i<PATH_MAX;++i) name[i]=0;
     int j = 0;
@@ -526,11 +526,11 @@ printentline(struct entry ent[NCOLS], int ind)
         if (strlen(name) > maxlen)
             name[maxlen] = '\0';
 
-        char line[maxlen]; for (j=0;j<maxlen;++j) line[j]=0;
+        char line[2*maxlen]; for (j=0;j<maxlen;++j) line[j]=0;
         char lformat[10]; for (j=0;j<10;++j) lformat[j]=0;
         char align = 0; (i % 2 == 1) ? (align = '+') : (align = '-');
-        sprintf(lformat, "%c%c%ds", '%', align, COLS/NCOLS - 1);
 
+        sprintf(lformat, "%c%c%ds", '%', align, COLS/NCOLS - 1);
 
         if (ent[i].dummy==0) {
             if (cm == 0)
