@@ -506,19 +506,14 @@ printentline(struct entry ent[NCOLS], int ind)
         strlcpy(name, ent[i].name, sizeof(name));
             if (S_ISDIR(ent[i].mode)) {
                 cm = '/';
-                maxlen--;
             } else if (S_ISLNK(ent[i].mode)) {
                 cm = '@';
-                maxlen--;
             } else if (S_ISSOCK(ent[i].mode)) {
                 cm = '=';
-                maxlen--;
             } else if (S_ISFIFO(ent[i].mode)) {
                 cm = '|';
-                maxlen--;
             } else if (ent[i].mode & S_IXUSR) {
                 cm = '*';
-                maxlen--;
             }
         }
 
@@ -534,7 +529,7 @@ printentline(struct entry ent[NCOLS], int ind)
 
         if (ent[i].dummy==0) {
             if (cm == 0)
-                sprintf(line , "%s%s ", (ind+get_delta(i)==cur[i] ) ? CURSR : EMPTY, name);
+                sprintf(line , "%s%s%c ", (ind+get_delta(i)==cur[i] ) ? CURSR : EMPTY, name, ' ');
             else
                 sprintf(line , "%s%s%c ", (ind+get_delta(i)==cur[i]) ? CURSR : EMPTY, name, cm);
 
