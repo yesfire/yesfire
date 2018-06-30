@@ -40,6 +40,13 @@
 #define CONTROL(c) ((c) ^ 0x40)
 #define META(c) ((c) ^ 0x80)
 
+#ifndef PATH_MAX
+#define PATH_MAX 256
+#endif
+#ifndef LINE_MAX
+#define LINE_MAX 128
+#endif
+
 struct assoc {
 	char *regex; /* Regex to match on filename */
 	char *bin;   /* Program */
@@ -434,20 +441,20 @@ int
 get_delta(int i)
 {
     int delta;
-        int nlines = MIN(LINES - 4, ndents[i]);
+    int nlines = MIN(LINES - 4, ndents[i]);
 
-        if (cur[i] < nlines / 2) {
-            delta = 0;
+    if (cur[i] < nlines / 2) {
+        delta = 0;
 
-        } else if (cur[i] >= ndents[i] - nlines / 2) {
-            delta = ndents[i] -nlines;
+    } else if (cur[i] >= ndents[i] - nlines / 2) {
+        delta = ndents[i] -nlines;
 
-        }
-        else {
-            delta = cur[i] - nlines /2;
-        }
+    }
+    else {
+        delta = cur[i] - nlines /2;
+    }
 
-        return delta;
+    return delta;
 }
 void
 getentline(struct entry ent[NCOLS], int index, int j)
@@ -477,7 +484,7 @@ getentline(struct entry ent[NCOLS], int index, int j)
                 ent[i].t=0;
                 ent[i].dummy=1;
             }
-            }
+        }
     }
 
     return;
@@ -487,7 +494,7 @@ void
 printentline(struct entry ent[NCOLS], int ind)
 {
 	char name[PATH_MAX];
-	unsigned int maxlen = COLS - strlen(CURSR) - 1;
+	unsigned int maxlen = COLS/NCOLS - strlen(CURSR) - 1;
     int i = 0;
     for (i=0;i<PATH_MAX;++i) name[i]=0;
     int j = 0;
@@ -521,7 +528,10 @@ printentline(struct entry ent[NCOLS], int ind)
 
         char line[maxlen]; for (j=0;j<maxlen;++j) line[j]=0;
         char lformat[10]; for (j=0;j<10;++j) lformat[j]=0;
-        sprintf(lformat, "%c%ds", '%', COLS/NCOLS - 1);
+        char align = 0; (i % 2 == 1) ? (align = '+') : (align = '-');
+        sprintf(lformat, "%c%c%ds", '%', align, COLS/NCOLS - 1);
+
+
         if (ent[i].dummy==0) {
             if (cm == 0)
                 sprintf(line , "%s%s ", (ind+get_delta(i)==cur[i] ) ? CURSR : EMPTY, name);
@@ -709,7 +719,8 @@ redraw(char path[NCOLS][PATH_MAX])
 }
 
 void
-populate_current(char path[NCOLS][PATH_MAX], char oldpath[NCOLS][PATH_MAX], char fltr[LINE_MAX]) {
+populate_current(char path[NCOLS][PATH_MAX], char oldpath[NCOLS][PATH_MAX], char fltr[LINE_MAX])
+{
     int r = populate(path[curcol], oldpath[curcol], fltr, curcol);
     if (r == -1) {
         printwarn();
