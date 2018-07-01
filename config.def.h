@@ -4,6 +4,7 @@
 
 #define CWD   "You are here: "
 #define CURSR " -> "
+#define NTFY  "[!] "
 #define EMPTY "    "
 
 int mtimeorder  = 1; /* Set to 1 to sort by time modified */
@@ -92,7 +93,7 @@ struct key bindings[] = {
     { 'a',            SEL_ADDCOL},
     { 'o',            SEL_ADDCOL},
     { 'd',            SEL_REMOVECOL},
-    { 't',            SEL_SORTCOL},
+    { 'f',            SEL_SORTCOL},
     { '0',            SEL_FASTDIR},
     { '1',            SEL_FASTDIR},
     { '2',            SEL_FASTDIR},

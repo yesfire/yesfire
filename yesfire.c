@@ -40,6 +40,15 @@
 #define CONTROL(c) ((c) ^ 0x40)
 #define META(c) ((c) ^ 0x80)
 
+#define SWAP(x,y) do \
+   { unsigned char swap_temp[sizeof(x) == sizeof(y) ? (signed)sizeof(x) : -1]; \
+     memcpy(swap_temp,&y,sizeof(x)); \
+     memcpy(&y,&x,       sizeof(x)); \
+     memcpy(&x,swap_temp,sizeof(x)); \
+    } while(0)
+
+
+
 #ifndef PATH_MAX
 #define PATH_MAX 256
 #endif
@@ -95,17 +104,18 @@ struct key_out {
 
 struct entry {
 	char name[PATH_MAX];
-	mode_t mode;
 	time_t t;
+	mode_t mode;
+	char notify;
 	char dummy;
 };
 
 /* Global context */
 struct entry *dents[MAX_COLS];
-int ndents[MAX_COLS], cur[MAX_COLS];
+int ndents[MAX_COLS], cur[MAX_COLS], total_notifications[MAX_COLS];
 short curcol, totalcols;
 int idle;
-
+time_t lastupdatetimestamp;
 /*
  * Layout:
  * .---------
@@ -474,6 +484,7 @@ getentline(struct entry ent[MAX_COLS], int index, int j)
                 ent[i].mode=0;
                 ent[i].t=0;
                 ent[i].dummy=1;
+                ent[i].notify=0;
             }
         }
         else {
@@ -486,6 +497,7 @@ getentline(struct entry ent[MAX_COLS], int index, int j)
                 ent[i].mode=0;
                 ent[i].t=0;
                 ent[i].dummy=1;
+                ent[i].notify=0;
             }
         }
     }
@@ -531,10 +543,18 @@ printentline(struct entry ent[MAX_COLS], int ind)
         sprintf(lformat, "%c%c%ds", '%', align, COLS/totalcols - 2);
 
         if (ent[i].dummy==0) {
-            if (cm == 0)
-                sprintf(line , "%s%s%c ", (ind+get_delta(i)==cur[i] ) ? CURSR : EMPTY, name, ' ');
+            char* cursor;
+            if (ind+get_delta(i)==cur[i] )
+                cursor = CURSR;
+            else if (ent[i].notify)
+                cursor = NTFY;
             else
-                sprintf(line , "%s%s%c ", (ind+get_delta(i)==cur[i]) ? CURSR : EMPTY, name, cm);
+                cursor = EMPTY;
+
+            if (cm == 0)
+                sprintf(line , "%s%s%c ", cursor , name, ' ');
+            else
+                sprintf(line , "%s%s%c ", cursor , name, cm);
 
 
             if (ind+get_delta(i)==cur[i] && i==curcol) attron(A_STANDOUT);
@@ -584,6 +604,7 @@ dentfill(char *path, struct entry **dents,
 		(*dents)[n].mode = sb.st_mode;
 		(*dents)[n].t = sb.st_mtime;
         (*dents)[n].dummy  = 0;
+        (*dents)[n].notify  = 0;
 		n++;
 	}
 
@@ -639,6 +660,7 @@ populate(char *path, char *oldpath, char *fltr,char coli)
     cur[coli] = 0;
 	ndents[coli] = 0;
 	dents[coli] = NULL;
+    total_notifications[coli]=0;
 
 	ndents[coli] = dentfill(path, &dents[coli], visible, &re);
 
@@ -749,9 +771,9 @@ addcol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char flt
         if (r == -1) {
            printwarn();
            return;
-         }
-         curcol = totalcols;
-         totalcols++;
+        }
+        curcol = totalcols;
+        totalcols++;
 
     }
     return;
@@ -776,15 +798,83 @@ removecol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX])
         else {
             curcol = totalcols - 2;
         }
+        dentfree(dents[totalcols]);
         totalcols--;
     }
     return;
 }
 
-void sortcol()
+int
+update_col(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX], int index)
 {
+    populate(path[index], oldpath[index], fltr, index);
+    int i, flag =0;
+    for (i=0;i<ndents[index];++i) {
+        if (dents[index][i].t > lastupdatetimestamp) {
+            dents[index][i].notify = 1;
+            total_notifications[index]++;
+            flag = 1;
+        }
+    }
+    return flag;
+}
+
+void
+swap_cols(int i, int j, char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX])
+{
+    SWAP(dents[i],dents[j]);
+    SWAP(ndents[i],ndents[j]);
+    SWAP(cur[i], cur[j]);
+    SWAP(total_notifications[i], total_notifications[j]);
+    SWAP(path[i],path[j]);
+    SWAP(oldpath[i], oldpath[j]);
     return;
 }
+
+int
+cmp_cols(int i, int j)
+{
+
+    if (total_notifications[i] > total_notifications[j]) return 1;
+
+    return 0;
+}
+
+void
+remove_notification()
+{
+    if (dents[curcol][cur[curcol]].notify == 1) total_notifications[curcol]--;
+    dents[curcol][cur[curcol]].notify = 0;
+    return;
+}
+
+void
+sortcols(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX])
+{
+    int i, need_sort;
+    int j;
+    need_sort = 0;
+    for (i = 0; i< totalcols ; ++i)
+        need_sort += update_col(path, oldpath, fltr, i);
+
+    if (need_sort) {
+        lastupdatetimestamp = time(NULL);
+        for (i = 0; i< totalcols; ++i) {
+            for (j = 0; j< totalcols; ++j) {
+                if (cmp_cols(i, j) && (i!=j)) {
+                    swap_cols(i, j,path, oldpath);
+                }
+            }
+        }
+    curcol = 0;
+    cur[curcol]=0;
+    remove_notification();
+
+    }
+
+    return;
+}
+
 void
 browse(char *ipath[MAX_COLS], char *ifilter)
 {
@@ -800,6 +890,8 @@ browse(char *ipath[MAX_COLS], char *ifilter)
 
     size_t i = 0;
     size_t j = 0;
+
+    lastupdatetimestamp = time(NULL);
 
     for (i=0;i<LINE_MAX;++i) {
         fltr[i]=0;
@@ -823,6 +915,10 @@ browse(char *ipath[MAX_COLS], char *ifilter)
             printwarn();
             goto nochange;
         }
+    }
+
+    for (i=0;i<totalcols; ++i) {
+        total_notifications[i]=0;
     }
 
 begin:
@@ -925,10 +1021,11 @@ nochange:
 			goto begin;
 		case SEL_NEXT:
 	    	if (ndents[curcol] - 1 == cur[curcol])
-            { cur[curcol] = 0; break;}
+            { cur[curcol] = 0; remove_notification(); break; }
 
 			if (cur[curcol] < ndents[curcol] - 1)
 		    	cur[curcol]++;
+            remove_notification();
 			break;
 		case SEL_PREV:
             if (0==cur[curcol])
@@ -936,6 +1033,7 @@ nochange:
 
 			if (cur[curcol] > 0)
 				cur[curcol]--;
+		    remove_notification();
 			break;
 		case SEL_PGDN:
 			if (cur[curcol] < ndents[curcol] - 1)
@@ -1054,7 +1152,7 @@ nochange:
             removecol(path, oldpath);
             break;
         case SEL_SORTCOL:
-            sortcol();
+            sortcols(path, oldpath, fltr);
             break;
 
 		default:
@@ -1067,6 +1165,10 @@ nochange:
 			spawn(idlecmd, NULL, NULL);
 			initcurses();
 		}
+
+		if ((autosorttimeout!=0) && (idle % autosorttimeout == autosorttimeout/2)) {
+            sortcols(path,oldpath,fltr);
+        }
 	}
 }
 
