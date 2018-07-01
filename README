@@ -13,21 +13,43 @@
 Shameless suckless 2f30.org noice fork.
 
 1. Selected entry highlighting.
-2. 4 columns rendering with Space, L/H switching.
+2. Default 4 columns(panels) rendering with Space, L/H switching.
 3. Cyclic scrolling.
 4. Renamed binary noice -> yesfire.
 
-alias y=yesfire >> .zshrc
+    alias y=yesfire >> .zshrc
+
+And now the KILLING FEATURE comes. Real time column adding(o,a to open,
+d to close) with modification time column autosorting(f)
+with notification.
+
+Combine it with tmux horizontal pane split and you can easily oversee 20
+or more directories from single 1920x1080 modern monitor with 14 font size.
+
+Mass surveliance for whole /24 subnet or maintaining 20
+repositories simulatenously or listening top 500 favourite songs.
+Whatever, man.
+
+See it in action penetrating guts of 20(!!!) distros from remote
+ftp://ftp.yandex.ru server here:
+
+    https://i.imgur.com/bzi8kQ5.png
 
 Fuck mc, vifm, ranger, nerdtree and other stuff.
 
-Now it's the best and only four column file manager in
+Now it's the best and only multicolumn file manager in
 the world. Seriously.
 
-See it working on Windows 10: https://i.imgur.com/1uQB508.png
+See it working on Windows 10 with Cygwin(MinGW too probably):
 
-Also it runs even on the Android smartphones via Termux.
-Prooflink: https://i.imgur.com/MPBa5IT.png
+    https://i.imgur.com/1uQB508.png
+
+Also it runs even on the Android smartphones via Termux:
+
+    https://i.imgur.com/MPBa5IT.png
+
+Hope you enjoy it. Now I'm out. Good luck and have fun.
+
 
   ___     ___ /\_\    ___     __
 /' _ `\  / __`\/\ \  /'___\ /'__`\

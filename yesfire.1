@@ -3,10 +3,11 @@
 .Os
 .Sh NAME
 .Nm yesfire
-.Nd small file browser
+.Nd small multicolumn file browser
 .Sh SYNOPSIS
 .Nm
-.Op Ar dir
+.Op Ar -c col_number
+.Op Ar dir0 ... dirn
 .Sh DESCRIPTION
 .Nm
 is a simple and efficient file browser that gets out of your way
@@ -43,12 +44,18 @@ Scroll down half a page.
 Move to the first entry.
 .It Ic [End], $ or M->
 Move to the last entry.
-.It [Space] or L
-Move to next column.
-.It H
-Move to previous column.
 .It Ic [End], $ or M->
 Move to the last entry.
+.It Ic [Space] or L
+Move to next column.
+.It Ic H
+Move to previous column.
+.It Ic a or o
+Add new column.
+.It Ic d
+Remove current column.
+.It Ic t
+Sort columns by modify time.
 .It Ic l, [Right], [Return] or C-m
 Open file or enter directory.
 .It Ic h, C-h, [Left] or [Backspace]
@@ -149,4 +156,4 @@ you might have to set backspace key to DEC.
 .Sh AUTHORS
 .An Lazaros Koromilas Aq Mt lostd@2f30.org ,
 .An Dimitris Papastamos Aq Mt sin@2f30.org ,
-.An Other random guy .
+.An Other Random Guy Aq Mt nothistime@mailinator.com .

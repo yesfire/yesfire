@@ -7,10 +7,12 @@
 #define EMPTY "    "
 
 int mtimeorder  = 1; /* Set to 1 to sort by time modified */
+int autosorttimeout = 0; /* Set colum autosort timeout in seconds */
 int idletimeout = 0; /* Screensaver timeout in seconds, 0 to disable */
 int showhidden  = 1; /* Set to 1 to show hidden files by default */
 char *idlecmd   = "screenfetch"; /* The screensaver program */
-#define NCOLS 4 /* Number of columns */
+#define NCOLS 4 /* Default number of columns */
+#define MAX_COLS 32 /* Max number of columns */
 
 struct assoc assocs[] = {
 	{ "\\.(avi|mp4|mkv|mp3|ogg|flac|mov)$", "mplayer" },
@@ -87,6 +89,10 @@ struct key bindings[] = {
     { 'L',            SEL_NEXTCOL},
     { 'H',            SEL_PREVCOL},
     { META('P'),      SEL_PREVCOL},
+    { 'a',            SEL_ADDCOL},
+    { 'o',            SEL_ADDCOL},
+    { 'd',            SEL_REMOVECOL},
+    { 't',            SEL_SORTCOL},
     { '0',            SEL_FASTDIR},
     { '1',            SEL_FASTDIR},
     { '2',            SEL_FASTDIR},

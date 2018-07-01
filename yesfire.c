@@ -73,7 +73,10 @@ enum action {
 	SEL_RUNARG,
 	SEL_NEXTCOL,
 	SEL_PREVCOL,
-	SEL_FASTDIR
+	SEL_FASTDIR,
+	SEL_ADDCOL,
+	SEL_REMOVECOL,
+	SEL_SORTCOL
 };
 
 struct key {
@@ -98,9 +101,9 @@ struct entry {
 };
 
 /* Global context */
-struct entry *dents[NCOLS];
-int ndents[NCOLS], cur[NCOLS];
-short curcol;
+struct entry *dents[MAX_COLS];
+int ndents[MAX_COLS], cur[MAX_COLS];
+short curcol, totalcols;
 int idle;
 
 /*
@@ -299,7 +302,7 @@ initcurses(void)
 		exit(1);
 	}
 	if (COLS < 80) {fprintf(stderr, "minimum 80 cols terminal please, its 4 panel file viewer\n"); endwin(); exit(1);}
-	if (COLS/NCOLS < 20) {fprintf(stderr, "minimum 20 cols per panel please.\n"); endwin(); exit(1);}
+	if (COLS/totalcols < 20) {fprintf(stderr, "minimum 20 cols per panel please.\n"); endwin(); exit(1);}
 
 	cbreak();
 	noecho();
@@ -457,11 +460,11 @@ get_delta(int i)
     return delta;
 }
 void
-getentline(struct entry ent[NCOLS], int index, int j)
+getentline(struct entry ent[MAX_COLS], int index, int j)
 {
     int i = 0;
     int delta = 0;
-    for (i =0;i<NCOLS;++i) {
+    for (i =0;i<totalcols;++i) {
         if (i==curcol) {
             if (j<ndents[i]){
                     ent[i] = dents[i][j+get_delta(i)];
@@ -491,14 +494,14 @@ getentline(struct entry ent[NCOLS], int index, int j)
 }
 
 void
-printentline(struct entry ent[NCOLS], int ind)
+printentline(struct entry ent[MAX_COLS], int ind)
 {
 	char name[PATH_MAX];
-	unsigned int maxlen = COLS/NCOLS - strlen(CURSR) - 1;
+	unsigned int maxlen = COLS/totalcols - strlen(CURSR) - 1;
     int i = 0;
     for (i=0;i<PATH_MAX;++i) name[i]=0;
     int j = 0;
-    for (i =0;i<NCOLS;++i) {
+    for (i =0;i<totalcols;++i) {
         /* Copy name locally */
         char cm = 0;
 
@@ -525,7 +528,7 @@ printentline(struct entry ent[NCOLS], int ind)
         char lformat[10]; for (j=0;j<10;++j) lformat[j]=0;
         char align = 0; (i % 2 == 1) ? (align = '+') : (align = '-');
 
-        sprintf(lformat, "%c%c%ds", '%', align, COLS/NCOLS - 2);
+        sprintf(lformat, "%c%c%ds", '%', align, COLS/totalcols - 2);
 
         if (ent[i].dummy==0) {
             if (cm == 0)
@@ -545,7 +548,7 @@ printentline(struct entry ent[NCOLS], int ind)
             printw(lformat, " ");
         }
         attroff(A_STANDOUT);
-        if (i==NCOLS - 1) printw ("\n");
+        if (i==totalcols - 1) printw ("\n");
     }
 }
 
@@ -652,7 +655,7 @@ populate(char *path, char *oldpath, char *fltr,char coli)
 }
 
 void
-redraw(char path[NCOLS][PATH_MAX])
+redraw(char path[MAX_COLS][PATH_MAX])
 {
 	char cwd[PATH_MAX], cwdresolved[PATH_MAX];
 	size_t ntcols;
@@ -661,7 +664,7 @@ redraw(char path[NCOLS][PATH_MAX])
 
     int maxndents = 0;
     for (i=0;i<PATH_MAX;++i) {cwd[i]=0; cwdresolved[i]=0;}
-    for (i=0;i<NCOLS; ++i)
+    for (i=0;i<totalcols; ++i)
         if (ndents[i]>maxndents)
             maxndents =ndents[i];
 
@@ -671,7 +674,7 @@ redraw(char path[NCOLS][PATH_MAX])
 	erase();
 
 	/* Strip trailing slashes */
-	for (j=0;j<NCOLS;j++) {
+	for (j=0;j<totalcols;j++) {
 	for (i = strlen(path[j]) - 1; i > 0; i--)
 		if (path[j][i] == '/')
 			path[j][i] = '\0';
@@ -694,7 +697,7 @@ redraw(char path[NCOLS][PATH_MAX])
 	/* Print listing */
 	odd = ISODD(nlines);
 	j=0;
-    struct entry line[NCOLS];
+    struct entry line[MAX_COLS];
 	if (cur[curcol] < nlines / 2) {
 		for (i = 0; i < nlines; i++) {
             getentline(line, i,i);
@@ -718,7 +721,7 @@ redraw(char path[NCOLS][PATH_MAX])
 }
 
 void
-populate_current(char path[NCOLS][PATH_MAX], char oldpath[NCOLS][PATH_MAX], char fltr[LINE_MAX])
+populate_current(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX])
 {
     int r = populate(path[curcol], oldpath[curcol], fltr, curcol);
     if (r == -1) {
@@ -727,13 +730,67 @@ populate_current(char path[NCOLS][PATH_MAX], char oldpath[NCOLS][PATH_MAX], char
     }
 }
 
+void
+addcol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX])
+{
+    int i;
+    if (totalcols  < MAX_COLS)  {
+        if (!S_ISDIR(dents[curcol][cur[curcol]].mode)) {
+            for (i=0;i<PATH_MAX;++i) {
+                path[totalcols][i] = path[curcol][i];
+                oldpath[totalcols][i]=oldpath[curcol][i];
+            }
+        }
+        else {
+            mkpath(path[curcol], dents[curcol][cur[curcol]].name, path[totalcols] , sizeof(path[totalcols]));
+        }
+
+        int r = populate(path[totalcols], oldpath[totalcols], fltr, totalcols);
+        if (r == -1) {
+           printwarn();
+           return;
+         }
+         curcol = totalcols;
+         totalcols++;
+
+    }
+    return;
+}
 
 void
-browse(char *ipath[NCOLS], char *ifilter)
+removecol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX])
+{
+    int i,j;
+    if (totalcols > 1) {
+        if (curcol!=totalcols-1) {
+            for (i=curcol;i<totalcols;++i) {
+                dents[i] = dents[i+1];
+                ndents[i] = ndents[i+1];
+                cur[i] = cur[i+1];
+                for (j=0;j<PATH_MAX;++j) {
+                    path[i][j] = path[i+1][j];
+                    oldpath[i][j]=oldpath[i+1][j];
+                }
+            }
+        }
+        else {
+            curcol = totalcols - 2;
+        }
+        totalcols--;
+    }
+    return;
+}
+
+void sortcol()
+{
+    return;
+}
+void
+browse(char *ipath[MAX_COLS], char *ifilter)
 {
     struct key_out nextkey;
     int numcode = 0;
-	char path[NCOLS][PATH_MAX], oldpath[NCOLS][PATH_MAX], newpath[NCOLS][PATH_MAX];
+	char path[MAX_COLS][PATH_MAX], oldpath[MAX_COLS][PATH_MAX], newpath[MAX_COLS][PATH_MAX];
 	char fltr[LINE_MAX];
 	char fastdir[PATH_MAX];
 	char *bin, *dir, *tmp, *run, *env;
@@ -747,20 +804,20 @@ browse(char *ipath[NCOLS], char *ifilter)
     for (i=0;i<LINE_MAX;++i) {
         fltr[i]=0;
     }
-    for (i=0;i<NCOLS;++i) {
+    for (i=0;i<totalcols;++i) {
         for(j=0;j<PATH_MAX;++j) {
             path[i][j] = 0;
             oldpath[i][j]=0;
             newpath[i][j]=0;
         }
     }
-    for (i=0;i<NCOLS; ++i) {
+    for (i=0;i<totalcols; ++i) {
         strlcpy(path[i], ipath[i], sizeof(path[i]));
         oldpath[i][0] = '\0';
     }
     strlcpy(fltr, ifilter, sizeof(fltr));
 	curcol = 0;
-    for (i=0;i<NCOLS; ++i) {
+    for (i=0;i<totalcols; ++i) {
         r = populate(path[i], oldpath[i], fltr, i);
         if (r == -1) {
             printwarn();
@@ -775,7 +832,7 @@ nochange:
         nextkey = nextsel(&run, &env);
         switch (nextkey.enumc) {
 		case SEL_QUIT:
-		    for (i=0;i<NCOLS;++i)
+		    for (i=0;i<totalcols;++i)
                 dentfree(dents[i]);
 			return;
 		case SEL_BACK:
@@ -985,10 +1042,19 @@ nochange:
 			initcurses();
 			break;
         case SEL_NEXTCOL:
-            (curcol < NCOLS - 1) ? (curcol++) : (curcol = 0);
+            (curcol < totalcols - 1) ? (curcol++) : (curcol = 0);
             break;
         case SEL_PREVCOL:
-            (curcol == 0) ? (curcol = NCOLS - 1): (curcol--) ;
+            (curcol == 0) ? (curcol = totalcols - 1): (curcol--) ;
+            break;
+        case SEL_ADDCOL:
+             addcol(path, oldpath, fltr);
+            break;
+        case SEL_REMOVECOL:
+            removecol(path, oldpath);
+            break;
+        case SEL_SORTCOL:
+            sortcol();
             break;
 
 		default:
@@ -1014,7 +1080,7 @@ version()
 void
 usage(char *argv0)
 {
-	fprintf(stderr, "usage: %s [dir 0] ... [dir %d]\n", argv0, NCOLS-1);
+	fprintf(stderr, "usage: %s [-c num_cols] [dir 0] ... [dir %d]\n", argv0, NCOLS-1);
 	exit(1);
 }
 
@@ -1022,7 +1088,7 @@ int
 main(int argc, char *argv[])
 {
 	char cwd[PATH_MAX];
-	char *ipath[NCOLS];
+	char *ipath[MAX_COLS];
 	char *ifilter;
 
   	/* Confirm we are in a terminal */
@@ -1035,9 +1101,15 @@ main(int argc, char *argv[])
 		showhidden = 1;
 	initfilter(showhidden, &ifilter);
 
-    int c = 0;
-    while ((c = getopt (argc, argv, "uvh?")) != -1)
+    int c = 0; totalcols = NCOLS;
+    while ((c = getopt (argc, argv, "c:uvh?")) != -1)
     switch (c) {
+         case 'c':
+             totalcols = atoi(optarg);
+             if ((totalcols>MAX_COLS) || (totalcols<1)) {
+                 fprintf(stderr, "wrong cols number, must be in [1..%d]\n", MAX_COLS); exit(1);
+             }
+             break;
          case 'v':
             version();
             break;
@@ -1055,7 +1127,7 @@ main(int argc, char *argv[])
     signal(SIGQUIT, SIG_IGN);
 
     size_t i = 0;
-    for (i = 0; i < NCOLS; ++i) {
+    for (i = 0; i < totalcols; ++i) {
         if (i<argc) {
             if (argv[i] != NULL)  {
                 ipath[i] = argv[i];
