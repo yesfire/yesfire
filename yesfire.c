@@ -535,6 +535,9 @@ printentline(struct entry ent[NCOLS], int ind)
 
 
             if (ind+get_delta(i)==cur[i] && i==curcol) attron(A_STANDOUT);
+
+            if ((strlen(line) >=maxlen) && (cm!=0) && (line[maxlen-2]) !=cm)
+                line[maxlen-1] = cm;
             line[maxlen]='\0';
             printw(lformat, line);
         }
@@ -915,10 +918,6 @@ nochange:
             numcode = nextkey.keyp - '0';
 			if ((numcode >=0) && (numcode <10)) {
 				strlcpy(fastdir,fast_dirs[numcode], sizeof(tmp));
-				if (fastdir == NULL) {
-					clearprompt();
-					goto nochange;
-				}
 
 				mkpath(path[curcol], fastdir, newpath[curcol], sizeof(newpath[curcol]));
 				if (canopendir(newpath[curcol]) == 0) {
@@ -992,7 +991,7 @@ nochange:
             (curcol == 0) ? (curcol = NCOLS - 1): (curcol--) ;
             break;
 
-		default: 
+		default:
 		    break;
 		}
 		/* Screensaver */

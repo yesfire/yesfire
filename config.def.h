@@ -9,7 +9,7 @@
 int mtimeorder  = 1; /* Set to 1 to sort by time modified */
 int idletimeout = 0; /* Screensaver timeout in seconds, 0 to disable */
 int showhidden  = 1; /* Set to 1 to show hidden files by default */
-char *idlecmd   = "fortune | cowsay"; /* The screensaver program */
+char *idlecmd   = "screenfetch"; /* The screensaver program */
 #define NCOLS 4 /* Number of columns */
 
 struct assoc assocs[] = {
@@ -82,19 +82,21 @@ struct key bindings[] = {
 	{ 't',            SEL_MTIME },
 	{ CONTROL('L'),   SEL_REDRAW },
 	/* Next col */
-    { ' ',            SEL_NEXTCOL },
-    { 'L',            SEL_NEXTCOL },
-    { 'H',            SEL_PREVCOL },
-    { '0',            SEL_FASTDIR },
-    { '1',            SEL_FASTDIR },
-    { '2',            SEL_FASTDIR },
-    { '3',            SEL_FASTDIR },
-    { '4',            SEL_FASTDIR },
-    { '5',            SEL_FASTDIR },
-    { '6',            SEL_FASTDIR },
-    { '7',            SEL_FASTDIR },
-    { '8',            SEL_FASTDIR },
-    { '9',            SEL_FASTDIR },
+    { ' ',            SEL_NEXTCOL},
+    { META('N'),      SEL_NEXTCOL},
+    { 'L',            SEL_NEXTCOL},
+    { 'H',            SEL_PREVCOL},
+    { META('P'),      SEL_PREVCOL},
+    { '0',            SEL_FASTDIR},
+    { '1',            SEL_FASTDIR},
+    { '2',            SEL_FASTDIR},
+    { '3',            SEL_FASTDIR},
+    { '4',            SEL_FASTDIR},
+    { '5',            SEL_FASTDIR},
+    { '6',            SEL_FASTDIR},
+    { '7',            SEL_FASTDIR},
+    { '8',            SEL_FASTDIR},
+    { '9',            SEL_FASTDIR},
 	/* Run command */
 	{ 'z',            SEL_RUN, "htop" },
 	{ 'i',            SEL_RUN, "zsh", "SHELL" },
