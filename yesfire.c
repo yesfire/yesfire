@@ -767,7 +767,6 @@ addcol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char flt
         else {
             mkpath(path[curcol], dents[curcol][cur[curcol]].name, path[totalcols] , sizeof(path[totalcols]));
         }
-
         int r = populate(path[totalcols], oldpath[totalcols], fltr, totalcols);
         if (r == -1) {
            printwarn();
@@ -800,6 +799,7 @@ removecol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX])
             curcol = totalcols - 2;
         }
         dentfree(dents[totalcols]);
+        dents[totalcols]=NULL;
         totalcols--;
     }
     return;
@@ -930,7 +930,7 @@ nochange:
         switch (nextkey.enumc) {
 		case SEL_QUIT:
 		    for (i=0;i<totalcols;++i)
-                dentfree(dents[i]);
+            { dentfree(dents[i]); dents[i]= NULL; }
 			return;
 		case SEL_BACK:
 			/* There is no going back */
