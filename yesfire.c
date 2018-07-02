@@ -509,7 +509,7 @@ getentline(struct entry ent[MAX_COLS], int index, int j)
 void
 printentline(struct entry ent[MAX_COLS], int ind)
 {
-	char name[PATH_MAX];
+  	char name[PATH_MAX];
 	unsigned int maxlen = COLS/totalcols - strlen(CURSR) - 1;
     int i = 0;
     for (i=0;i<PATH_MAX;++i) name[i]=0;
@@ -680,6 +680,9 @@ populate(char *path, char *oldpath, char *fltr,char coli)
 void
 redraw(char path[MAX_COLS][PATH_MAX])
 {
+     if (LINES < 5) {erase(); return;}
+     if ((COLS/(totalcols)<15) && (totalcols!=0)) {erase(); return;}
+
 	char cwd[PATH_MAX], cwdresolved[PATH_MAX];
 	size_t ntcols;
 	int nlines, odd;
@@ -756,6 +759,7 @@ populate_current(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX]
 void
 addcol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX])
 {
+    if (COLS/(totalcols+1) < 20) {  return; }
     int i;
     if ((totalcols  < MAX_COLS)) {
         if (ndents[curcol]==0) {
