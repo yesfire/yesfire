@@ -757,7 +757,21 @@ void
 addcol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX])
 {
     int i;
-    if (totalcols  < MAX_COLS)  {
+    if ((totalcols  < MAX_COLS)) {
+        if (ndents[curcol]==0) {
+            for (i=0;i<PATH_MAX;++i) {
+                    path[totalcols][i] = path[curcol][i];
+                    oldpath[totalcols][i]=oldpath[curcol][i];
+            }
+            int r = populate(path[totalcols], oldpath[totalcols], fltr, totalcols);
+            if (r == -1) {
+                printwarn();
+                return;
+            }
+            curcol = totalcols;
+            totalcols++;
+            return;
+        }
         if (!S_ISDIR(dents[curcol][cur[curcol]].mode)) {
             for (i=0;i<PATH_MAX;++i) {
                 path[totalcols][i] = path[curcol][i];
@@ -767,16 +781,17 @@ addcol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char flt
         else {
             mkpath(path[curcol], dents[curcol][cur[curcol]].name, path[totalcols] , sizeof(path[totalcols]));
         }
+
         int r = populate(path[totalcols], oldpath[totalcols], fltr, totalcols);
         if (r == -1) {
-           printwarn();
-           return;
+            printwarn();
+            return;
         }
         curcol = totalcols;
         totalcols++;
 
-    }
-    return;
+        }
+        return;
 }
 
 void
@@ -1021,20 +1036,24 @@ nochange:
             populate_current(path,oldpath,fltr);
 			goto begin;
 		case SEL_NEXT:
-	    	if (ndents[curcol] - 1 == cur[curcol])
-            { cur[curcol] = 0; remove_notification(); break; }
+		    if (ndents[curcol]!=0) {
+                if (ndents[curcol] - 1 == cur[curcol])
+                { cur[curcol] = 0; remove_notification(); break; }
 
-			if (cur[curcol] < ndents[curcol] - 1)
-		    	cur[curcol]++;
-            remove_notification();
+                if (cur[curcol] < ndents[curcol] - 1)
+                    cur[curcol]++;
+                remove_notification();
+            }
 			break;
 		case SEL_PREV:
-            if (0==cur[curcol])
-			    cur[curcol] = ndents[curcol];
+		    if (ndents[curcol]!=0) {
+                if (0==cur[curcol])
+                    cur[curcol] = ndents[curcol];
 
-			if (cur[curcol] > 0)
-				cur[curcol]--;
-		    remove_notification();
+                if (cur[curcol] > 0)
+                    cur[curcol]--;
+                remove_notification();
+            }
 			break;
 		case SEL_PGDN:
 			if (cur[curcol] < ndents[curcol] - 1)
