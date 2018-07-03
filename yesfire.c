@@ -4,22 +4,25 @@
 #include <sys/wait.h>
 
 #include <curses.h>
+
+#include <unistd.h>
 #include <dirent.h>
-#include <errno.h>
+
 #include <fcntl.h>
 #include <libgen.h>
+
+#include <regex.h>
+
+#include <errno.h>
 #include <limits.h>
 #include <locale.h>
-#include <regex.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
 
-#include "util.h"
 
 #ifdef DEBUG
 #define DEBUG_FD 8
@@ -49,7 +52,6 @@
     } while(0)
 
 
-
 #ifndef PATH_MAX
 #define PATH_MAX 256
 #endif
@@ -57,13 +59,14 @@
 #define LINE_MAX 128
 #endif
 
-struct assoc {
+#define MAX_ASSOCS_RESERVE 10
+typedef struct {
 	char *regex; /* Regex to match on filename */
-	char *bin;   /* Program */
-};
+	char *bin[MAX_ASSOCS_RESERVE];   /* Program */
+}assoc_t;
 
 /* Supported actions */
-enum action {
+typedef enum  {
 	SEL_QUIT = 1,
 	SEL_BACK,
 	SEL_GOIN,
@@ -86,57 +89,285 @@ enum action {
 	SEL_FASTDIR,
 	SEL_ADDCOL,
 	SEL_REMOVECOL,
-	SEL_SORTCOL
-};
+	SEL_SORTCOL,
+	SEL_STACKMODE,
+}action_t;
 
-struct key {
+typedef enum {
+    STACK_DELFILE = 1,
+    STACK_DELDIR,
+    STACK_RENAMEFILE,
+    STACK_RENAMEDIR,
+    STACK_MOVEFILE,
+    STACK_MOVEDIR,
+    STACK_MAKEDIR,
+    STACK_TOUCHFILE,
+    STACK_COPYFILE,
+    STACK_COPYDIR,
+    STACK_PUSHCOLCWD,
+    STACK_PUSHCOLCURDIR,
+    STACK_PUSHCOLCURFILE,
+    STACK_SWAPFILE,
+    STACK_SWAPDIR,
+    STACK_DROPDIR,
+    STACK_DROPFILE,
+    STACK_DUPDIR,
+    STACK_DUPFILE,
+    STACK_OVERDIR,
+    STACK_OVERFILE,
+    STACK_ROTDIR,
+    STACK_ROTFILE,
+    STACK_PICKDIR,
+    STACK_PICKFILE,
+    STACK_SHOWCWDSEL,
+    STACK_NORMALMODE,
+}stack_mode_action_t;
+
+typedef enum {
+    SYS_RMFILE,
+    SYS_RMDIR,
+    SYS_RENAME,
+    SYS_MOVE,
+    SYS_MKDIR,
+    SYS_TOUCH,
+    SYS_COPYFILE,
+    SYS_COPYDIR,
+}sysfileops_type_t;
+
+typedef struct {
+    sysfileops_type_t type;
+    char* bin;
+}sysfileops_t;
+
+typedef struct {
 	int sym;         /* Key pressed */
-	enum action act; /* Action */
+	action_t act; /* Action */
 	char *run;       /* Program to run */
 	char *env;       /* Environment variable to run */
-};
+}yf_key_t;
 
-struct key_out {
+typedef struct {
+    int sym;
+    stack_mode_action_t act;
+}yf_smkey_t;
+
+typedef struct {
     int enumc;
     char keyp;
-};
+}key_out_t;
+
+typedef enum {
+    DEFAULT_FILE_OPS,
+    USE_SYSTEM_BINARIES,
+    BRUTEFORCE666
+}file_ops_styles_t;
+
+typedef enum {
+    YF_VIEW,
+    YF_EDIT,
+    YF_RUN
+}default_behaviour_types_t;
 
 #include "config.h"
-
-struct entry {
+typedef struct {
 	char name[PATH_MAX];
 	time_t t;
 	mode_t mode;
 	char notify;
 	char dummy;
+}entry_t;
+
+typedef struct {
+    int ndents,cur,total_notifications;
+    entry_t *dents;
+    char path[PATH_MAX], oldpath[PATH_MAX], newpath[PATH_MAX];
+}column_t;
+
+
+#define MAX_STATUS_LINE 128
+typedef struct {
+    column_t cols[MAX_COLS];
+    short curcol, totalcols;
+    int idle;
+    time_t lastupdatetimestamp;
+
+	char fltr[LINE_MAX];
+	char fastdir[PATH_MAX];
+
+    entry_t directory_stack;
+    entry_t files_stack;
+
+    char status_line[MAX_STATUS_LINE];
+}filemanager_t;
+
+static char* user_strings[] = {
+    "error opening terminal: %s\n",
+    "failed to initialize curses\n",
+    "minimum 80 cols terminal please, its 4 panel file viewer\n",
+    "minimum 20 cols per panel please.\n",
+    "No association",
+    "Unsupported file",
+    "filter(aka regex): ",
+    "Change dir where?: ",
+    "Yesfire 42.0: Some men just want to watch the fil(r)es OPENED.\n",
+    "usage: %s [-e stack_mode_command] [-c num_cols] [dir 0] ... [dir %d]\n",
+    "stdin or stdout is not a tty\n",
+    "wrong cols number, must be in [1..%d]\n",
 };
 
-/* Global context */
-struct entry *dents[MAX_COLS];
-int ndents[MAX_COLS], cur[MAX_COLS], total_notifications[MAX_COLS];
-short curcol, totalcols;
-int idle;
-time_t lastupdatetimestamp;
-/*
- * Layout:
- * .---------
- * | cwd: /mnt/path
- * |
- * |    file0
- * |    file1
- * |  > file2
- * |    file3
- * |    file4
- *      ...
- * |    filen
- * |
- * | Permission denied
- * '------
- */
+typedef enum {
+    STR_ERR_TERMINAL_OPEN,
+    STR_ERR_CURSES_INIT_FAILED,
+    STR_ERR_RESIZE_FAILED,
+    STR_ERR_RESIZE_FAILED2,
+    STR_ERROR_NO_ASSOC,
+    STR_ERR_UNSUPPORTED_FILE,
+    STR_PROMPT_REGEX,
+    STR_PROMPT_CD,
+    STR_VERSION,
+    STR_USAGE,
+    STR_ERR_NOTATTY,
+    STR_ERR_COLS_ARG_FAILED
+}user_strings_list_t;
 
 void printmsg(char *);
 void printwarn(void);
 void printerr(int, char *);
+
+static filemanager_t*
+get_filemanager()
+{
+    static filemanager_t fire;
+    return &fire;
+}
+
+static column_t*
+getcurrentcolumn(filemanager_t* fm)
+{
+    return &fm->cols[fm->curcol];
+}
+
+static int
+getcurrentcolumnndents(filemanager_t* fm)
+{
+    return fm->cols[fm->curcol].ndents;
+}
+
+
+static entry_t*
+getcurrentry(filemanager_t* fm)
+{
+    column_t* c = getcurrentcolumn(fm);
+    return &c->dents[c->cur];
+}
+
+
+static char*
+getcurrentryname(filemanager_t* fm)
+{
+    column_t* c = getcurrentcolumn(fm);
+    return c->dents[c->cur].name;
+}
+
+static mode_t
+getcurrentrymode(filemanager_t* fm)
+{
+    column_t* c = getcurrentcolumn(fm);
+    return c->dents[c->cur].mode;
+}
+
+
+static int
+gettotalcols()
+{
+    filemanager_t* fm = get_filemanager();
+    return fm->totalcols;
+}
+
+
+/* ========================================================================= */
+/*
+ * Copyright (c) 1998, 2015 Todd C. Miller <Todd.Miller@courtesan.com>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * Appends src to string dst of size dsize (unlike strncat, dsize is the
+ * full size of dst, not space left).  At most dsize-1 characters
+ * will be copied.  Always NUL terminates (unless dsize <= strlen(dst)).
+ * Returns strlen(src) + MIN(dsize, strlen(initial dst)).
+ * If retval >= dsize, truncation occurred.
+ */
+
+size_t
+strlcat(char *dst, const char *src, size_t dsize)
+{
+	const char *odst = dst;
+	const char *osrc = src;
+	size_t n = dsize;
+	size_t dlen;
+
+	/* Find the end of dst and adjust bytes left but don't go past end. */
+	while (n-- != 0 && *dst != '\0')
+		dst++;
+	dlen = dst - odst;
+	n = dsize - dlen;
+
+	if (n-- == 0)
+		return(dlen + strlen(src));
+	while (*src != '\0') {
+		if (n != 0) {
+			*dst++ = *src;
+			n--;
+		}
+		src++;
+	}
+	*dst = '\0';
+
+	return(dlen + (src - osrc));	/* count does not include NUL */
+}
+
+/*
+ * Copy string src to buffer dst of size dsize.  At most dsize-1
+ * chars will be copied.  Always NUL terminates (unless dsize == 0).
+ * Returns strlen(src); if retval >= dsize, truncation occurred.
+ */
+size_t
+strlcpy(char *dst, const char *src, size_t dsize)
+{
+	const char *osrc = src;
+	size_t nleft = dsize;
+
+	/* Copy as many bytes as will fit. */
+	if (nleft != 0) {
+		while (--nleft != 0) {
+			if ((*dst++ = *src++) == '\0')
+				break;
+		}
+	}
+
+	/* Not enough room in dst, add NUL and traverse rest of src. */
+	if (nleft == 0) {
+		if (dsize != 0)
+			*dst = '\0';		/* NUL-terminate dst */
+		while (*src++)
+			;
+	}
+
+	return(src - osrc - 1);	/* count does not include NUL */
+}
+/* ========================================================================= */
 
 #undef dprintf
 int
@@ -238,12 +469,12 @@ openwith(char *file)
 	char *bin = NULL;
 	int i;
 
-	for (i = 0; i < LEN(assocs); i++) {
-		if (regcomp(&regex, assocs[i].regex,
+	for (i = 0; i < LEN(assocs_view); i++) {
+		if (regcomp(&regex, assocs_view[i].regex,
 			    REG_NOSUB | REG_EXTENDED | REG_ICASE) != 0)
 			continue;
 		if (regexec(&regex, file, 0, NULL, 0) == 0) {
-			bin = assocs[i].bin;
+			bin = assocs_view[i].bin[0];
 			regfree(&regex);
 			break;
 		}
@@ -292,7 +523,7 @@ visible(regex_t *regex, char *file)
 int
 entrycmp(const void *va, const void *vb)
 {
-	const struct entry *a = va, *b = vb;
+	const entry_t *a = va, *b = vb;
 
 	if (mtimeorder)
 		return b->t - a->t;
@@ -300,20 +531,20 @@ entrycmp(const void *va, const void *vb)
 }
 
 void
-initcurses(void)
+initcurses(int totalcols)
 {
 	char *term;
 
 	if (initscr() == NULL) {
 		term = getenv("TERM");
 		if (term != NULL)
-			fprintf(stderr, "error opening terminal: %s\n", term);
+			fprintf(stderr,  user_strings[STR_ERR_TERMINAL_OPEN], term);
 		else
-			fprintf(stderr, "failed to initialize curses\n");
+			fprintf(stderr, "%s", user_strings[STR_ERR_CURSES_INIT_FAILED]);
 		exit(1);
 	}
-	if (COLS < 80) {fprintf(stderr, "minimum 80 cols terminal please, its 4 panel file viewer\n"); endwin(); exit(1);}
-	if (COLS/totalcols < 20) {fprintf(stderr, "minimum 20 cols per panel please.\n"); endwin(); exit(1);}
+	if (COLS < 80) {fprintf(stderr,"%s", user_strings[STR_ERR_RESIZE_FAILED]); endwin(); exit(1);}
+	if (COLS/totalcols < 20) {fprintf(stderr, "%s", user_strings[STR_ERR_RESIZE_FAILED2]); endwin(); exit(1);}
 
 	cbreak();
 	noecho();
@@ -372,22 +603,22 @@ printprompt(char *str)
 int xgetch(void)
 {
 	int c;
-
+    filemanager_t* fm = get_filemanager();
 	c = getch();
 	if (c == -1)
-		idle++;
+		fm->idle++;
 	else
-		idle = 0;
+		fm->idle = 0;
 	return c;
 }
 
 /* Returns SEL_* if key is bound and 0 otherwise.
  * Also modifies the run and env pointers (used on SEL_{RUN,RUNARG}) */
-struct key_out
+key_out_t
 nextsel(char **run, char **env)
 {
 	int c, i;
-	struct key_out out;
+	key_out_t out;
 
 	c = xgetch();
 	if (c == 033)
@@ -455,30 +686,34 @@ int
 get_delta(int i)
 {
     int delta;
-    int nlines = MIN(LINES - 4, ndents[i]);
+    filemanager_t* fm = get_filemanager();
+    int ndents = fm->cols[i].ndents;
+    int cur = fm->cols[i].cur;
+    int nlines = MIN(LINES - 4, ndents);
 
-    if (cur[i] < nlines / 2) {
+    if (cur < nlines / 2) {
         delta = 0;
 
-    } else if (cur[i] >= ndents[i] - nlines / 2) {
-        delta = ndents[i] -nlines;
+    } else if (cur >= ndents - nlines / 2) {
+        delta = ndents -nlines;
 
     }
     else {
-        delta = cur[i] - nlines /2;
+        delta = cur - nlines /2;
     }
 
     return delta;
 }
 void
-getentline(struct entry ent[MAX_COLS], int index, int j)
+getentline(entry_t ent[MAX_COLS], int index, int j)
 {
     int i = 0;
     int delta = 0;
-    for (i =0;i<totalcols;++i) {
-        if (i==curcol) {
-            if (j<ndents[i]){
-                    ent[i] = dents[i][j+get_delta(i)];
+    filemanager_t* fm = get_filemanager();
+    for (i =0;i<fm->totalcols;++i) {
+        if (i==fm->curcol) {
+            if (j<fm->cols[i].ndents){
+                    ent[i] = fm->cols[i].dents[j+get_delta(i)];
             }
             else {
                 ent[i].name[0]='\0';
@@ -489,9 +724,9 @@ getentline(struct entry ent[MAX_COLS], int index, int j)
             }
         }
         else {
-            if (j<ndents[i]){
+            if (j<fm->cols[i].ndents){
                 delta = get_delta(i);
-                ent[i] = dents[i][j+delta];
+                ent[i] = fm->cols[i].dents[j+delta];
             }
             else {
                 ent[i].name[0]='\0';
@@ -507,11 +742,13 @@ getentline(struct entry ent[MAX_COLS], int index, int j)
 }
 
 void
-printentline(struct entry ent[MAX_COLS], int ind)
+printentline(entry_t ent[MAX_COLS], int ind)
 {
   	char name[PATH_MAX];
+    int totalcols = gettotalcols();
 	unsigned int maxlen = COLS/totalcols - strlen(CURSR) - 1;
     int i = 0;
+    filemanager_t* fm = get_filemanager();
     for (i=0;i<PATH_MAX;++i) name[i]=0;
     int j = 0;
     for (i =0;i<totalcols;++i) {
@@ -545,7 +782,7 @@ printentline(struct entry ent[MAX_COLS], int ind)
 
         if (ent[i].dummy==0) {
             char* cursor;
-            if (ind+get_delta(i)==cur[i] )
+            if (ind+get_delta(i)==fm->cols[i].cur)
                 cursor = CURSR;
             else if (ent[i].notify)
                 cursor = NTFY;
@@ -558,7 +795,7 @@ printentline(struct entry ent[MAX_COLS], int ind)
                 sprintf(line , "%s%s%c ", cursor , name, cm);
 
 
-            if (ind+get_delta(i)==cur[i] && i==curcol) attron(A_STANDOUT);
+            if (ind+get_delta(i)==fm->cols[i].cur && i==fm->curcol) attron(A_STANDOUT);
 
             if ((strlen(line) >=maxlen) && (cm!=0) && (line[maxlen-2]) !=cm)
                 line[maxlen-1] = cm;
@@ -574,7 +811,7 @@ printentline(struct entry ent[MAX_COLS], int ind)
 }
 
 int
-dentfill(char *path, struct entry **dents,
+dentfill(char *path, entry_t **dents,
 	 int (*filter)(regex_t *, char *), regex_t *re)
 {
 	char newpath[PATH_MAX];
@@ -617,14 +854,14 @@ dentfill(char *path, struct entry **dents,
 }
 
 void
-dentfree(struct entry *dents)
+dentfree(entry_t* dents)
 {
 	free(dents);
 }
 
 /* Return the position of the matching entry or 0 otherwise */
 int
-dentfind(struct entry *dents, int n, char *cwd, char *path)
+dentfind(entry_t *dents, int n, char *cwd, char *path)
 {
 	char tmp[PATH_MAX];
 	int i;
@@ -647,6 +884,7 @@ populate(char *path, char *oldpath, char *fltr,char coli)
 	regex_t re;
 	int r;
 
+    filemanager_t* fm = get_filemanager();
 	/* Can fail when permissions change while browsing */
 	if (canopendir(path) == 0)
 		return -1;
@@ -656,32 +894,32 @@ populate(char *path, char *oldpath, char *fltr,char coli)
 	if (r != 0)
 		return -1;
 
-	dentfree(dents[coli]);
+	dentfree(fm->cols[coli].dents);
 
-    cur[coli] = 0;
-	ndents[coli] = 0;
-	dents[coli] = NULL;
-    total_notifications[coli]=0;
+    fm->cols[coli].cur = 0;
+	fm->cols[coli].ndents = 0;
+	fm->cols[coli].dents = NULL;
+    fm->cols[coli].total_notifications=0;
 
-	ndents[coli] = dentfill(path, &dents[coli], visible, &re);
+	fm->cols[coli].ndents = dentfill(path, &fm->cols[coli].dents, visible, &re);
 
 	freefilter(&re);
-	if (ndents[coli] == 0)
+	if (fm->cols[coli].ndents == 0)
 		return 0; /* Empty result */
 
-	qsort(dents[coli], ndents[coli], sizeof(*dents[coli]), entrycmp);
+	qsort(fm->cols[coli].dents, fm->cols[coli].ndents, sizeof(*(fm->cols[coli].dents)), entrycmp);
 
 	/* Find cur from history */
-	cur[coli] = dentfind(dents[coli], ndents[coli], path, oldpath);
+	fm->cols[coli].cur = dentfind(fm->cols[coli].dents, fm->cols[coli].ndents, path, oldpath);
 
 	return 0;
 }
 
 void
-redraw(char path[MAX_COLS][PATH_MAX])
+redraw(filemanager_t* fm)
 {
      if (LINES < 5) {erase(); return;}
-     if ((COLS/(totalcols)<15) && (totalcols!=0)) {erase(); return;}
+     if ((COLS/(fm->totalcols)<15) && (fm->totalcols!=0)) {erase(); return;}
 
 	char cwd[PATH_MAX], cwdresolved[PATH_MAX];
 	size_t ntcols;
@@ -690,9 +928,9 @@ redraw(char path[MAX_COLS][PATH_MAX])
 
     int maxndents = 0;
     for (i=0;i<PATH_MAX;++i) {cwd[i]=0; cwdresolved[i]=0;}
-    for (i=0;i<totalcols; ++i)
-        if (ndents[i]>maxndents)
-            maxndents =ndents[i];
+    for (i=0;i<fm->totalcols; ++i)
+        if (fm->cols[i].ndents>maxndents)
+            maxndents =fm->cols[i].ndents;
 
 	nlines = MIN(LINES - 4, maxndents);
 
@@ -700,22 +938,25 @@ redraw(char path[MAX_COLS][PATH_MAX])
 	erase();
 
 	/* Strip trailing slashes */
-	for (j=0;j<totalcols;j++) {
-	for (i = strlen(path[j]) - 1; i > 0; i--)
-		if (path[j][i] == '/')
-			path[j][i] = '\0';
+	for (j=0;j<fm->totalcols;j++) {
+	for (i = strlen(fm->cols[j].path) - 1; i > 0; i--)
+		if (fm->cols[j].path[i] == '/')
+			fm->cols[j].path[i] = '\0';
 		else
 			break;
     }
+    int cur_curcol = fm->cols[fm->curcol].cur;
+    char* cur_path = fm->cols[fm->curcol].path;
+    int ndents = getcurrentcolumnndents(fm);
 
-	DPRINTF_D(cur[curcol]);
-	DPRINTF_S(path[curcol]);
+	DPRINTF_D(cur_curcol);
+	DPRINTF_S(cur_path);
 
 	/* No text wrapping in cwd line */
 	ntcols = COLS;
     if (ntcols > PATH_MAX)
     	ntcols = PATH_MAX;
-    strlcpy(cwd, path[curcol], ntcols);
+    strlcpy(cwd, cur_path, ntcols);
     cwd[ntcols - strlen(CWD) - 1] = '\0';
     realpath(cwd, cwdresolved);
 
@@ -723,22 +964,22 @@ redraw(char path[MAX_COLS][PATH_MAX])
 	/* Print listing */
 	odd = ISODD(nlines);
 	j=0;
-    struct entry line[MAX_COLS];
-	if (cur[curcol] < nlines / 2) {
+    entry_t line[MAX_COLS];
+	if (cur_curcol < nlines / 2) {
 		for (i = 0; i < nlines; i++) {
             getentline(line, i,i);
 			printentline(line, i );
         }
-	} else if (cur[curcol] >= ndents[curcol] - nlines / 2) {
-		for (i = ndents[curcol] - nlines; i < ndents[curcol]; i++) {
+	} else if (cur_curcol >= ndents - nlines / 2) {
+		for (i = ndents - nlines; i < ndents; i++) {
 
             getentline(line, i, j);
 			printentline(line,   j++);
         }
 	} else {
 	    j = 0;
-		for (i = cur[curcol] - nlines / 2;
-		     i < cur[curcol] + nlines / 2 + odd; i++) {
+		for (i = cur_curcol - nlines / 2;
+		     i < cur_curcol + nlines / 2 + odd; i++) {
             getentline(line, i, j);
 			printentline(line,  j++);
         }
@@ -747,238 +988,238 @@ redraw(char path[MAX_COLS][PATH_MAX])
 }
 
 void
-populate_current(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX])
+populate_current(filemanager_t* fm)
 {
-    int r = populate(path[curcol], oldpath[curcol], fltr, curcol);
+    column_t* curcol = getcurrentcolumn(fm);
+    int r = populate(curcol->path, curcol->oldpath, fm->fltr, fm->curcol);
     if (r == -1) {
         printwarn();
         return;
     }
+    return;
 }
 
 void
-addcol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX])
+addcol(filemanager_t* fm)
 {
-    if (COLS/(totalcols+1) < 20) {  return; }
+    column_t* curcol = getcurrentcolumn(fm);
+    column_t* cols = fm->cols;
+    if (COLS/(fm->totalcols+1) < 20) {  return; }
     int i;
-    if ((totalcols  < MAX_COLS)) {
-        if (ndents[curcol]==0) {
+    if ((fm->totalcols  < MAX_COLS)) {
+        if (curcol->ndents==0) {
             for (i=0;i<PATH_MAX;++i) {
-                    path[totalcols][i] = path[curcol][i];
-                    oldpath[totalcols][i]=oldpath[curcol][i];
+                    cols[fm->totalcols].path[i] = curcol->path[i];
+                    cols[fm->totalcols].oldpath[i]=curcol->oldpath[i];
             }
-            int r = populate(path[totalcols], oldpath[totalcols], fltr, totalcols);
+            int r = populate(cols[fm->totalcols].path, cols[fm->totalcols].oldpath, fm->fltr, fm->totalcols);
             if (r == -1) {
                 printwarn();
                 return;
             }
-            curcol = totalcols;
-            totalcols++;
+            fm->curcol = fm->totalcols;
+            fm->totalcols++;
             return;
         }
-        if (!S_ISDIR(dents[curcol][cur[curcol]].mode)) {
+        if (!S_ISDIR(getcurrentrymode(fm))) {
             for (i=0;i<PATH_MAX;++i) {
-                path[totalcols][i] = path[curcol][i];
-                oldpath[totalcols][i]=oldpath[curcol][i];
+                 cols[fm->totalcols].path[i] = curcol->path[i];
+                 cols[fm->totalcols].oldpath[i] = curcol->oldpath[i];
             }
         }
         else {
-            mkpath(path[curcol], dents[curcol][cur[curcol]].name, path[totalcols] , sizeof(path[totalcols]));
+            mkpath(curcol->path, getcurrentryname(fm), cols[fm->totalcols].path , sizeof(cols[fm->totalcols].path));
         }
 
-        int r = populate(path[totalcols], oldpath[totalcols], fltr, totalcols);
+        int r = populate(cols[fm->totalcols].path, cols[fm->totalcols].oldpath, fm->fltr, fm->totalcols);
         if (r == -1) {
             printwarn();
             return;
         }
-        curcol = totalcols;
-        totalcols++;
+        fm->curcol = fm->totalcols;
+        fm->totalcols++;
 
         }
         return;
 }
 
 void
-removecol(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX])
+removecol(filemanager_t* fm)
 {
     int i,j;
-    if (totalcols > 1) {
-        if (curcol!=totalcols-1) {
-            for (i=curcol;i<totalcols;++i) {
-                dents[i] = dents[i+1];
-                ndents[i] = ndents[i+1];
-                cur[i] = cur[i+1];
+    if (fm->totalcols > 1) {
+        if (fm->curcol!=fm->totalcols-1) {
+            for (i=fm->curcol;i<fm->totalcols;++i) {
+                fm->cols[i].dents = fm->cols[i+1].dents;
+                fm->cols[i].ndents =fm->cols[i+1].ndents;
+                fm->cols[i].cur = fm->cols[i+1].cur;
+
                 for (j=0;j<PATH_MAX;++j) {
-                    path[i][j] = path[i+1][j];
-                    oldpath[i][j]=oldpath[i+1][j];
+                    fm->cols[i].path[j] = fm->cols[i+1].path[j];
+                    fm->cols[i].oldpath[j]=fm->cols[i+1].oldpath[j];
                 }
             }
         }
         else {
-            curcol = totalcols - 2;
+            fm->curcol = fm->totalcols - 2;
         }
-        dentfree(dents[totalcols]);
-        dents[totalcols]=NULL;
-        totalcols--;
+        dentfree(fm->cols[fm->totalcols].dents);
+        fm->cols[fm->totalcols].dents=NULL;
+        fm->totalcols--;
     }
     return;
 }
 
 int
-update_col(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX], int index)
+update_col(filemanager_t* fm, int index)
 {
-    populate(path[index], oldpath[index], fltr, index);
+    populate(fm->cols[index].path, fm->cols[index].oldpath, fm->fltr, index);
     int i, flag =0;
-    for (i=0;i<ndents[index];++i) {
-        if (dents[index][i].t > lastupdatetimestamp) {
-            dents[index][i].notify = 1;
-            total_notifications[index]++;
+    for (i=0;i<fm->cols[index].ndents;++i) {
+        if (fm->cols[index].dents[i].t > fm->lastupdatetimestamp) {
+            fm->cols[index].dents[i].notify = 1;
+            fm->cols[index].total_notifications++;
             flag = 1;
         }
     }
     return flag;
 }
 
-void
-swap_cols(int i, int j, char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX])
-{
-    SWAP(dents[i],dents[j]);
-    SWAP(ndents[i],ndents[j]);
-    SWAP(cur[i], cur[j]);
-    SWAP(total_notifications[i], total_notifications[j]);
-    SWAP(path[i],path[j]);
-    SWAP(oldpath[i], oldpath[j]);
-    return;
-}
-
 int
-cmp_cols(int i, int j)
+cmp_cols(const void* c1, const void* c2)
 {
+    column_t* col1 = (column_t*) c1;
+    column_t* col2 = (column_t*) c2;
+    if (col1->total_notifications > col2->total_notifications) {
+        return 1;
+    }
 
-    if (total_notifications[i] > total_notifications[j]) return 1;
+    if (col1->total_notifications == col2->total_notifications) {
+        return 0;
+    }
 
-    return 0;
+    return -1;
+
 }
 
 void
-remove_notification()
+remove_notification(filemanager_t* fm)
 {
-    if (dents[curcol][cur[curcol]].notify == 1) total_notifications[curcol]--;
-    dents[curcol][cur[curcol]].notify = 0;
+    entry_t* ent = getcurrentry(fm);
+    column_t* col = getcurrentcolumn(fm);
+    if (ent->notify == 1) col->total_notifications--;
+    ent->notify = 0;
     return;
 }
 
 void
-sortcols(char path[MAX_COLS][PATH_MAX], char oldpath[MAX_COLS][PATH_MAX], char fltr[LINE_MAX])
+sortcols(filemanager_t* fm)
 {
     int i, need_sort;
     int j;
     need_sort = 0;
-    for (i = 0; i< totalcols ; ++i)
-        need_sort += update_col(path, oldpath, fltr, i);
+    for (i = 0; i< fm->totalcols ; ++i)
+        need_sort += update_col(fm, i);
 
     if (need_sort) {
-        lastupdatetimestamp = time(NULL);
-        for (i = 0; i< totalcols; ++i) {
-            for (j = 0; j< totalcols; ++j) {
-                if (cmp_cols(i, j) && (i!=j)) {
-                    swap_cols(i, j,path, oldpath);
-                }
-            }
-        }
-    curcol = 0;
-    cur[curcol]=0;
-    remove_notification();
+        fm->lastupdatetimestamp = time(NULL);
+        qsort(fm->cols, fm->totalcols, sizeof(column_t), cmp_cols);
+        fm->curcol = 0;
+        fm->cols[fm->curcol].cur=0;
+        remove_notification(fm);
+    }
 
+    return;
+}
+
+static void
+initfm (filemanager_t* fm, char *ipath[MAX_COLS], char *ifilter, int totalcols)
+{
+    fm->totalcols = totalcols;
+    fm->lastupdatetimestamp = time(NULL);
+    size_t i = 0;
+    size_t j = 0;
+    for (i=0;i<LINE_MAX;++i) {
+        fm->fltr[i]=0;
+    }
+    for (i=0;i<fm->totalcols;++i) {
+        for(j=0;j<PATH_MAX;++j) {
+            fm->cols[i].path[j] = 0;
+            fm->cols[i].oldpath[j]=0;
+            fm->cols[i].newpath[j]=0;
+        }
+    }
+    for (i=0;i<fm->totalcols; ++i) {
+        strlcpy(fm->cols[i].path, ipath[i], sizeof(fm->cols[i].path));
+        fm->cols[i].oldpath[0] = '\0';
+    }
+    strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
+	fm->curcol = 0;
+    for (i=0;i<fm->totalcols; ++i) {
+        int r = populate(fm->cols[i].path, fm->cols[i].oldpath, fm->fltr, i);
+        if (r == -1) {
+            printwarn();
+        }
+    }
+
+    for (i=0;i<fm->totalcols; ++i) {
+        fm->cols[i].total_notifications=0;
     }
 
     return;
 }
 
 void
-browse(char *ipath[MAX_COLS], char *ifilter)
+browse(char *ipath[MAX_COLS], char *ifilter, int totalcols)
 {
-    struct key_out nextkey;
+    key_out_t nextkey;
     int numcode = 0;
-	char path[MAX_COLS][PATH_MAX], oldpath[MAX_COLS][PATH_MAX], newpath[MAX_COLS][PATH_MAX];
-	char fltr[LINE_MAX];
-	char fastdir[PATH_MAX];
 	char *bin, *dir, *tmp, *run, *env;
 	struct stat sb;
 	regex_t re;
 	int r, fd;
-
-    size_t i = 0;
-    size_t j = 0;
-
-    lastupdatetimestamp = time(NULL);
-
-    for (i=0;i<LINE_MAX;++i) {
-        fltr[i]=0;
-    }
-    for (i=0;i<totalcols;++i) {
-        for(j=0;j<PATH_MAX;++j) {
-            path[i][j] = 0;
-            oldpath[i][j]=0;
-            newpath[i][j]=0;
-        }
-    }
-    for (i=0;i<totalcols; ++i) {
-        strlcpy(path[i], ipath[i], sizeof(path[i]));
-        oldpath[i][0] = '\0';
-    }
-    strlcpy(fltr, ifilter, sizeof(fltr));
-	curcol = 0;
-    for (i=0;i<totalcols; ++i) {
-        r = populate(path[i], oldpath[i], fltr, i);
-        if (r == -1) {
-            printwarn();
-            goto nochange;
-        }
-    }
-
-    for (i=0;i<totalcols; ++i) {
-        total_notifications[i]=0;
-    }
-
+	size_t i = 0;
+    filemanager_t* fm = get_filemanager();
+    initfm(fm, ipath, ifilter, totalcols);
 begin:
    	for (;;) {
-		redraw(path);
+    column_t* curcol = getcurrentcolumn(fm);
+		redraw(fm);
 nochange:
         nextkey = nextsel(&run, &env);
         switch (nextkey.enumc) {
 		case SEL_QUIT:
 		    for (i=0;i<totalcols;++i)
-            { dentfree(dents[i]); dents[i]= NULL; }
+            { dentfree(fm->cols[i].dents); fm->cols[i].dents= NULL; }
 			return;
 		case SEL_BACK:
 			/* There is no going back */
-			if (strcmp(path[curcol], "/") == 0 ||
-			    strcmp(path[curcol], ".") == 0 ||
-			    strchr(path[curcol], '/') == NULL)
+			if (strcmp(curcol->path, "/") == 0 ||
+			    strcmp(curcol->path, ".") == 0 ||
+			    strchr(curcol->path, '/') == NULL)
 				goto nochange;
-			dir = xdirname(path[curcol]);
+			dir = xdirname(curcol->path);
 			if (canopendir(dir) == 0) {
 				printwarn();
 				goto nochange;
 			}
 			/* Save history */
-			strlcpy(oldpath[curcol], path[curcol], sizeof(oldpath[curcol]));
-			strlcpy(path[curcol], dir, sizeof(path[curcol]));
+			strlcpy(curcol->oldpath, curcol->path, sizeof(curcol->oldpath));
+			strlcpy(curcol->path, dir, sizeof(curcol->path));
 			/* Reset filter */
-			strlcpy(fltr, ifilter, sizeof(fltr));
-            populate_current(path,oldpath,fltr);
+			strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
+            populate_current(fm);
 			goto begin;
 		case SEL_GOIN:
 			/* Cannot descend in empty directories */
-			if (ndents[curcol] == 0)
+			if (fm->cols[fm->curcol].ndents == 0)
 				goto nochange;
 
-			mkpath(path[curcol], dents[curcol][cur[curcol]].name, newpath[curcol], sizeof(newpath[curcol]));
-			DPRINTF_S(newpath[curcol]);
+			mkpath(curcol->path, getcurrentryname(fm), curcol->newpath, sizeof(curcol->newpath));
+			DPRINTF_S(curcol->newpath);
 
 			/* Get path info */
-			fd = open(newpath[curcol], O_RDONLY | O_NONBLOCK);
+			fd = open(curcol->newpath, O_RDONLY | O_NONBLOCK);
 			if (fd == -1) {
 				printwarn();
 				goto nochange;
@@ -994,33 +1235,33 @@ nochange:
 
 			switch (sb.st_mode & S_IFMT) {
 			case S_IFDIR:
-				if (canopendir(newpath[curcol]) == 0) {
+				if (canopendir(curcol->newpath) == 0) {
 					printwarn();
 					goto nochange;
 				}
-				strlcpy(path[curcol], newpath[curcol], sizeof(path[curcol]));
+				strlcpy(curcol->path, curcol->path, sizeof(curcol->path));
 				/* Reset filter */
-				strlcpy(fltr, ifilter, sizeof(fltr));
+				strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
 
-            populate_current(path,oldpath,fltr);
+            populate_current(fm);
 				goto begin;
 			case S_IFREG:
-				bin = openwith(newpath[curcol]);
+				bin = openwith(curcol->newpath);
 				if (bin == NULL) {
-					printmsg("No association");
+					printmsg(user_strings[STR_ERROR_NO_ASSOC]);
 					goto nochange;
 				}
 				exitcurses();
-				spawn(bin, newpath[curcol], NULL);
-				initcurses();
+				spawn(bin, curcol->newpath, NULL);
+				initcurses(fm->totalcols);
 				continue;
 			default:
-				printmsg("Unsupported file");
+				printmsg(user_strings[STR_ERR_UNSUPPORTED_FILE]);
 				goto nochange;
 			}
 		case SEL_FLTR:
 			/* Read filter */
-			printprompt("filter(aka regex): ");
+			printprompt(user_strings[STR_PROMPT_REGEX]);
 			tmp = readln();
 			if (tmp == NULL)
 				tmp = ifilter;
@@ -1029,85 +1270,85 @@ nochange:
 			if (r != 0)
 				goto nochange;
 			freefilter(&re);
-			strlcpy(fltr, tmp, sizeof(fltr));
-			DPRINTF_S(fltr);
+			strlcpy(fm->fltr, tmp, sizeof(fm->fltr));
+			DPRINTF_S(fm->fltr);
 			/* Save current */
-			if (ndents[curcol] > 0)
-				mkpath(path[curcol], dents[curcol][cur[curcol]].name, oldpath[curcol], sizeof(oldpath[curcol]));
+			if (curcol->ndents > 0)
+				mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
 
 
 
-            populate_current(path,oldpath,fltr);
+            populate_current(fm);
 			goto begin;
 		case SEL_NEXT:
-		    if (ndents[curcol]!=0) {
-                if (ndents[curcol] - 1 == cur[curcol])
-                { cur[curcol] = 0; remove_notification(); break; }
+		    if (curcol->ndents!=0) {
+                if (curcol->ndents - 1 == curcol->cur)
+                {  curcol->cur= 0; remove_notification(fm); break; }
 
-                if (cur[curcol] < ndents[curcol] - 1)
-                    cur[curcol]++;
-                remove_notification();
+                if (curcol->cur < curcol->ndents - 1)
+                    curcol->cur++;
+                remove_notification(fm);
             }
 			break;
 		case SEL_PREV:
-		    if (ndents[curcol]!=0) {
-                if (0==cur[curcol])
-                    cur[curcol] = ndents[curcol];
+		    if (curcol->ndents!=0) {
+                if (0==curcol->cur)
+                     curcol->cur= curcol->ndents;
 
-                if (cur[curcol] > 0)
-                    cur[curcol]--;
-                remove_notification();
+                if (curcol->cur > 0)
+                    curcol->cur--;
+                remove_notification(fm);
             }
 			break;
 		case SEL_PGDN:
-			if (cur[curcol] < ndents[curcol] - 1)
-				cur[curcol] += MIN((LINES - 4) / 2, ndents[curcol] - 1 - cur[curcol]);
+			if (curcol->cur < curcol->ndents - 1)
+				curcol->cur += MIN((LINES - 4) / 2, curcol->ndents - 1 - curcol->cur);
 			break;
 		case SEL_PGUP:
-			if (cur[curcol] > 0)
-				cur[curcol] -= MIN((LINES - 4) / 2, cur[curcol]);
+			if (curcol->cur > 0)
+				curcol->cur -= MIN((LINES - 4) / 2, curcol->cur);
 			break;
 		case SEL_HOME:
-			cur[curcol] = 0;
+			curcol->cur = 0;
 			break;
 		case SEL_END:
-			cur[curcol] = ndents[curcol] - 1;
+			curcol->cur = curcol->ndents - 1;
 			break;
 		case SEL_CD:
 			/* Read target dir */
-			printprompt("Change dir where?: ");
+			printprompt(user_strings[STR_PROMPT_CD]);
 			tmp = readln();
 			if (tmp == NULL) {
 				clearprompt();
 				goto nochange;
 			}
-			mkpath(path[curcol], tmp, newpath[curcol], sizeof(newpath[curcol]));
-			if (canopendir(newpath[curcol]) == 0) {
+			mkpath(curcol->path, tmp, curcol->path, sizeof(curcol->newpath));
+			if (canopendir(curcol->newpath) == 0) {
 				printwarn();
 				goto nochange;
 			}
-			strlcpy(path[curcol], newpath[curcol], sizeof(path[curcol]));
+			strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
 			/* Reset filter */
-			strlcpy(fltr, ifilter, sizeof(fltr))
-			DPRINTF_S(path[curcol]);
+			strlcpy(fm->fltr, ifilter, sizeof(fm->fltr))
+			DPRINTF_S(curcol->path);
 
-            populate_current(path,oldpath,fltr);
+            populate_current(fm);
 			goto begin;
         case SEL_FASTDIR:
             numcode = nextkey.keyp - '0';
 			if ((numcode >=0) && (numcode <10)) {
-				strlcpy(fastdir,fast_dirs[numcode], sizeof(tmp));
+				strlcpy(fm->fastdir,fast_dirs[numcode], sizeof(tmp));
 
-				mkpath(path[curcol], fastdir, newpath[curcol], sizeof(newpath[curcol]));
-				if (canopendir(newpath[curcol]) == 0) {
+				mkpath(curcol->path, fm->fastdir, curcol->newpath, sizeof(curcol->newpath));
+				if (canopendir(curcol->newpath) == 0) {
 					printwarn();
 					goto nochange;
 				}
-				strlcpy(path[curcol], newpath[curcol], sizeof(path[curcol]));
+				strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
 				/* Reset filter */
-				strlcpy(fltr, ifilter, sizeof(fltr))
-				DPRINTF_S(path[curcol]);
-				populate_current(path,oldpath,fltr);
+				strlcpy(fm->fltr, ifilter, sizeof(fm->fltr))
+				DPRINTF_S(path);
+				populate_current(fm);
 			}
 			goto begin;
             break;
@@ -1121,92 +1362,92 @@ nochange:
 				printwarn();
 				goto nochange;
 			}
-			strlcpy(path[curcol], tmp, sizeof(path[curcol]));
+			strlcpy(curcol->path, tmp, sizeof(curcol->path));
 			/* Reset filter */
-			strlcpy(fltr, ifilter, sizeof(fltr));
-			DPRINTF_S(path[curcol]);
+			strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
+			DPRINTF_S(curcol->path);
 
-            populate_current(path,oldpath,fltr);
+            populate_current(fm);
 			goto begin;
 		case SEL_TOGGLEDOT:
 			showhidden ^= 1;
 			initfilter(showhidden, &ifilter);
-			strlcpy(fltr, ifilter, sizeof(fltr));
+			strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
 
-            populate_current(path,oldpath,fltr);
+            populate_current(fm);
 
 			goto begin;
 		case SEL_MTIME:
 			mtimeorder = !mtimeorder;
 			/* Save current */
-			if (ndents[curcol] > 0)
-				mkpath(path[curcol], dents[curcol][cur[curcol]].name, oldpath[curcol], sizeof(oldpath[curcol]));
+			if (curcol->ndents > 0)
+				mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
 
-            populate_current(path,oldpath,fltr);
+            populate_current(fm);
 			goto begin;
 		case SEL_REDRAW:
 			/* Save current */
-			if (ndents[curcol] > 0)
-				mkpath(path[curcol], dents[curcol][cur[curcol]].name, oldpath[curcol], sizeof(oldpath[curcol]));
+			if (curcol->ndents > 0)
+				mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
 
-            populate_current(path,oldpath,fltr);
+            populate_current(fm);
 			goto begin;
 		case SEL_RUN:
 			run = xgetenv(env, run);
 			exitcurses();
-			spawn(run, NULL, path[curcol]);
-			initcurses();
+			spawn(run, NULL, curcol->path);
+			initcurses(fm->totalcols);
 			break;
 		case SEL_RUNARG:
 			run = xgetenv(env, run);
 			exitcurses();
-			spawn(run, dents[curcol][cur[curcol]].name, path[curcol]);
-			initcurses();
+			spawn(run, getcurrentryname(fm), curcol->path);
+			initcurses(fm->totalcols);
 			break;
         case SEL_NEXTCOL:
-            (curcol < totalcols - 1) ? (curcol++) : (curcol = 0);
+            (fm->curcol < fm->totalcols - 1) ? (fm->curcol++) : (fm->curcol = 0);
             break;
         case SEL_PREVCOL:
-            (curcol == 0) ? (curcol = totalcols - 1): (curcol--) ;
+            (fm->curcol == 0) ? (fm->curcol = fm->totalcols - 1): (fm->curcol--) ;
             break;
         case SEL_ADDCOL:
-             addcol(path, oldpath, fltr);
+             addcol(fm);
             break;
         case SEL_REMOVECOL:
-            removecol(path, oldpath);
+            removecol(fm);
             break;
         case SEL_SORTCOL:
-            sortcols(path, oldpath, fltr);
+            sortcols(fm);
             break;
 
 		default:
 		    break;
 		}
 		/* Screensaver */
-		if (idletimeout != 0 && idle == idletimeout) {
-			idle = 0;
+		if (idletimeout != 0 && fm->idle == idletimeout) {
+			fm->idle = 0;
 			exitcurses();
 			spawn(idlecmd, NULL, NULL);
-			initcurses();
+			initcurses(fm->totalcols);
 		}
 
-		if ((autosorttimeout!=0) && (idle % autosorttimeout == autosorttimeout/2)) {
-            sortcols(path,oldpath,fltr);
+		if ((autosorttimeout!=0) && (fm->idle % autosorttimeout == autosorttimeout/2)) {
+            sortcols(fm);
         }
 	}
 }
 
-void
+static void
 version()
 {
-    fprintf(stdout, "Yesfire 42.0: Some men just want to watch the fil(r)es OPENED.\n");
+    fprintf(stdout, "%s", user_strings[STR_VERSION]);
     exit(1);
 }
 
-void
+static void
 usage(char *argv0)
 {
-	fprintf(stderr, "usage: %s [-c num_cols] [dir 0] ... [dir %d]\n", argv0, NCOLS-1);
+	fprintf(stderr, user_strings[STR_USAGE] , argv0, NCOLS-1);
 	exit(1);
 }
 
@@ -1219,7 +1460,7 @@ main(int argc, char *argv[])
 
   	/* Confirm we are in a terminal */
 	if (!isatty(0) || !isatty(1)) {
-		fprintf(stderr, "stdin or stdout is not a tty\n");
+		fprintf(stderr, "%s", user_strings[STR_ERR_NOTATTY]);
 		exit(1);
 	}
 
@@ -1227,17 +1468,19 @@ main(int argc, char *argv[])
 		showhidden = 1;
 	initfilter(showhidden, &ifilter);
 
-    int c = 0; totalcols = NCOLS;
-    while ((c = getopt (argc, argv, "c:uvh?")) != -1)
+    int c = 0; int totalcols= NCOLS;
+    while ((c = getopt (argc, argv, "c:e:uvh?")) != -1)
     switch (c) {
          case 'c':
              totalcols = atoi(optarg);
              if ((totalcols>MAX_COLS) || (totalcols<1)) {
-                 fprintf(stderr, "wrong cols number, must be in [1..%d]\n", MAX_COLS); exit(1);
+                 fprintf(stderr, user_strings[STR_ERR_COLS_ARG_FAILED], MAX_COLS); exit(1);
              }
              break;
          case 'v':
             version();
+            break;
+         case 'e':
             break;
          case 'u':
          case 'h':
@@ -1272,8 +1515,8 @@ main(int argc, char *argv[])
 
 	/* Set locale before curses setup */
 	setlocale(LC_ALL, "");
-	initcurses();
-	browse(ipath, ifilter);
+	initcurses(totalcols);
+	browse(ipath, ifilter, totalcols);
 	exitcurses();
 	exit(0);
 }

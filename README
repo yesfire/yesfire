@@ -9,18 +9,24 @@
                                  -- by other random guy
 =======================================================
 
+Looks like I'm not the only one who forked it.
+nnn guy from https://github.com/jarun/nnn seriously pawned
+me with his interpretation but I don't give up and continue
+to deploy this. Challenge accepted.
 
 Shameless suckless 2f30.org noice fork.
 
 1. Selected entry highlighting.
 2. Default 4 columns(panels) rendering with Space, L/H switching.
 3. Cyclic scrolling.
-4. Renamed binary noice -> yesfire.
+4. Special STACK MODE for traditional file operations
+   (mkdir, touch, rm, mv, cp) support.
+5. Renamed binary noice -> yesfire.
 
     alias y=yesfire >> .zshrc
 
 And now the KILLING FEATURE comes. Real time column adding(o,a to open,
-d to close) with modification time column autosorting(f)
+x to close) with modification time column autosorting(f)
 with notification.
 
 Combine it with tmux horizontal pane split and you can easily oversee 20
@@ -50,65 +56,69 @@ Also it runs even on the Android smartphones via Termux:
 
 Hope you enjoy it. Now I'm out. Good luck and have fun.
 
+P.S. Though no. To really call it file manager we need
+support for mkdir, rm, mv and cp operations.
 
-  ___     ___ /\_\    ___     __
-/' _ `\  / __`\/\ \  /'___\ /'__`\
-/\ \/\ \/\ \L\ \ \ \/\ \__//\  __/
-\ \_\ \_\ \____/\ \_\ \____\ \____\
- \/_/\/_/\/___/  \/_/\/____/\/____/
-                                    -- by lostd and sin
-=======================================================
+So it's done via "STACK MODE". Each time you traverse
+file hierarchy selected entry is just implicitly pushed
+on the top of the stack.
+
+Then you press Tab or d two panels with two stacks with recently
+visited folders and files emerges.
+
+Then you just enter commands with FORTH-like syntax with
+
+    UPPER CASE FOR DIRECTORIES
+
+and
+
+    lower case for files.
+
+Commands in STACK mode:
+
+    %d d,D - delete %d files/DIRs
+    %d r,R - rename %d files/DIRs without drop
+    %d m,M - move %d files/DIRs to the top or top-%d of the DIR stack
+    %d i,I - makedir, file(touch) push it to the dir stack drop if file
+    %d y,Y - copy file, dir without drop
+    %d $   - push n column cwd to the dir stack
+    %d C   - push n column selection to the dir stack.
+             NOTE: If it's not dir nothing happens with the dir stack.
+             Zero dummy file just not pushed there and %d is dropped.
+    %d c   - push n column selection to the file stack.
+             NOTE: If it's not file nothing happens with the file stack.
+             Zero dummy file just not pushed there and %d is dropped.
+
+And standard stack primitives supported too:
+
+       s,S - swap
+    %d .,> - drop %d
+    %d u,U - dup %d
+       o,O - over
+       t,T - rot
+    %d p,P - pick
+
+And a special command to view indexed list of cwds and column selection.
+
+         v - show the indexed list of cwds and current selections
+             in all columns to use in C$c.
+
+Then your operations done just press f, Tab, Esc, Space or
+Enter to return back to the NORMAL MODE.
+
+Example:
+"'Tab'3d5$m " - kill last 3 traversed files then
+        move another one to fifth column cwd and return to the NORMAL MODE.
+
+"dd " - kill last traversed file and return to the NORMAL MODE.
+        NOTE: It's not necessary currently selected entry
+        because it can be a dir.
+
+So if you working from /home/%username% folder then:
+
+         "hhd1$D" is rm -rf / equivalent.
+
+That's it.
 
 
-What is it?
-===========
 
-noice is a small curses-based file browser.
-It was first developed to be used with a TV remote control for a media
-center solution.
-
-
-Getting started
-===============
-
-Get the latest version from the git-repository; build and install it.  Run
-noice in a directory to display its content in the form of a list, where
-each line is a file or directory.  The currently selected item will be
-preceded with a " > " by default.
-
-For more information refer to the manpage.
-
-
-Building
-========
-
-To build noice you need a curses implementation available.  In most
-cases you just do:
-
-    make
-
-It is known to work on OpenBSD, NetBSD, FreeBSD, DragonFly BSD, Linux, OSX,
-IRIX 6.5, Haiku and Solaris 9.  Some notes for building on certain systems
-follow.
-
- * IRIX 6.5:
-   Tested with gcc from http://freeware.sgi.com/.
-
-    make CC="gcc" LDLIBS="-lgen -lcurses"
-
- * Haiku:
-
-    make LDLIBS="-lncurses"
-
- * Solaris 9:
-   Tested with gcc from http://www.opencsw.org/.
-
-    export PATH=/usr/ccs/bin:/opt/csw/bin:$PATH
-    make CC="gcc"
-
-
-Contact
-=======
-
-To report bugs and/or submit patches, you can reach us through
-irc.2f30.org at #2f30.

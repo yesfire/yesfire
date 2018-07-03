@@ -1,4 +1,4 @@
-VERSION = 0.6
+VERSION = 42.0
 
 PREFIX = /usr/local
 MANPREFIX = $(PREFIX)/man
@@ -6,9 +6,9 @@ MANPREFIX = $(PREFIX)/man
 #CPPFLAGS = -DDEBUG
 #CFLAGS = -g
 LDLIBS = -lcurses
-DISTFILES = yesfire.c strlcat.c strlcpy.c util.h config.def.h\
-    yesfire.1 Makefile README LICENSE
-OBJ = yesfire.o strlcat.o strlcpy.o
+DISTFILES = yesfire.c config.h\
+            yesfire.1 Makefile README LICENSE
+OBJ = yesfire.o
 BIN = yesfire
 
 all: $(BIN)
@@ -16,12 +16,7 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $(OBJ) $(LDFLAGS) $(LDLIBS)
 
-yesfire.o: util.h config.h
-strlcat.o: util.h
-strlcpy.o: util.h
-
-config.h:
-	cp config.def.h $@
+yesfire.o: config.h
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
