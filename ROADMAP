@@ -1,0 +1,27 @@
+Basically it's designed to do fine 3 things.
+
+1. Expose human readable big picture of file system with minimal costs.
+2. Provide sane stable and secure way to manually perfom
+traditional file operations.
+3. Quickly locate appropriate binary to use with a file
+and required action.
+
+Moreover it tries to be as small and less arch, kernel, compiler,
+terminal, lib, fs dependent as possible and get literally everybody
+out of the way.
+
+It seems pretty simple at first glance but balancing it IRL is pain
+and serious business for the true jedi.
+
+i.e. How to do it without curses? What is the best kernel independent
+way to get file system update events? How to be sure that physical
+device blocks is zero or have maximum entropy after deletion?
+What about atomic copy from NFS BSD/zfs server in USA to FTP Win/ntfs
+server in China whith confirmation sent to Linux/ext4 terminal in Russia?
+See, none of this has a direct answer and I still can continue question
+it further. Shit is getting real.
+
+
+
+
+

@@ -3,14 +3,15 @@
 .Os
 .Sh NAME
 .Nm yesfire
-.Nd small multicolumn file browser
+.Nd small multicolumn file manager
 .Sh SYNOPSIS
 .Nm
 .Op Ar -c col_number
-.Op Ar dir0 ... dirn
+.Op Ar -e command
+.Op Ar dir/file 0 ... dir/file n
 .Sh DESCRIPTION
 .Nm
-is a simple and efficient file browser that gets out of your way
+is a small yet powerful file manager that gets out of your way
 as much as possible.
 It was initially implemented to be controlled with a TV remote control.
 .Pp
@@ -52,7 +53,7 @@ Move to next column.
 Move to previous column.
 .It Ic a or o
 Add new column.
-.It Ic d
+.It Ic x
 Remove current column.
 .It Ic t
 Sort columns by modify time.

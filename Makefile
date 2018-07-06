@@ -1,22 +1,21 @@
-VERSION = 42.0
+NAME = "Yesfire"
+VERSION = 42.0 #Version number is not an Answer. It shows the best time to use it.
+URL = "http://github.com/yesfire/yesfire"
+DESCRIPTION = "Minimalistic yet powerful multicolumn file manager"
 
-PREFIX = /usr/local
-MANPREFIX = $(PREFIX)/man
-
-#CPPFLAGS = -DDEBUG
-#CFLAGS = -g
-LDLIBS = -lcurses
-DISTFILES = yesfire.c config.h\
+DISTFILES = yesfire.c yesfire.h\
             yesfire.1 Makefile README LICENSE
 OBJ = yesfire.o
 BIN = yesfire
+
+LDLIBS = -lcurses
+PREFIX = /usr/local
+MANPREFIX = $(PREFIX)/man
 
 all: $(BIN)
 
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $(OBJ) $(LDFLAGS) $(LDLIBS)
-
-yesfire.o: config.h
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
@@ -37,3 +36,4 @@ dist:
 
 clean:
 	rm -f $(BIN) $(OBJ) yesfire-$(VERSION).tar.gz
+

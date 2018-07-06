@@ -1,204 +1,6 @@
 /* See LICENSE file for copyright and license details. */
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-
-#include <curses.h>
-
-#include <unistd.h>
-#include <dirent.h>
-
-#include <fcntl.h>
-#include <libgen.h>
-
-#include <regex.h>
-
-#include <errno.h>
-#include <limits.h>
-#include <locale.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-
-
-#ifdef DEBUG
-#define DEBUG_FD 8
-#define DPRINTF_D(x) dprintf(DEBUG_FD, #x "=%d\n", x)
-#define DPRINTF_U(x) dprintf(DEBUG_FD, #x "=%u\n", x)
-#define DPRINTF_S(x) dprintf(DEBUG_FD, #x "=%s\n", x)
-#define DPRINTF_P(x) dprintf(DEBUG_FD, #x "=0x%p\n", x)
-#else
-#define DPRINTF_D(x)
-#define DPRINTF_U(x)
-#define DPRINTF_S(x)
-#define DPRINTF_P(x)
-#endif /* DEBUG */
-
-#define LEN(x) (sizeof(x) / sizeof(*(x)))
-#undef MIN
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-#define ISODD(x) ((x) & 1)
-#define CONTROL(c) ((c) ^ 0x40)
-#define META(c) ((c) ^ 0x80)
-
-#define SWAP(x,y) do \
-   { unsigned char swap_temp[sizeof(x) == sizeof(y) ? (signed)sizeof(x) : -1]; \
-     memcpy(swap_temp,&y,sizeof(x)); \
-     memcpy(&y,&x,       sizeof(x)); \
-     memcpy(&x,swap_temp,sizeof(x)); \
-    } while(0)
-
-
-#ifndef PATH_MAX
-#define PATH_MAX 256
-#endif
-#ifndef LINE_MAX
-#define LINE_MAX 128
-#endif
-
-#define MAX_ASSOCS_RESERVE 10
-typedef struct {
-	char *regex; /* Regex to match on filename */
-	char *bin[MAX_ASSOCS_RESERVE];   /* Program */
-}assoc_t;
-
-/* Supported actions */
-typedef enum  {
-	SEL_QUIT = 1,
-	SEL_BACK,
-	SEL_GOIN,
-	SEL_FLTR,
-	SEL_NEXT,
-	SEL_PREV,
-	SEL_PGDN,
-	SEL_PGUP,
-	SEL_HOME,
-	SEL_END,
-	SEL_CD,
-	SEL_CDHOME,
-	SEL_TOGGLEDOT,
-	SEL_MTIME,
-	SEL_REDRAW,
-	SEL_RUN,
-	SEL_RUNARG,
-	SEL_NEXTCOL,
-	SEL_PREVCOL,
-	SEL_FASTDIR,
-	SEL_ADDCOL,
-	SEL_REMOVECOL,
-	SEL_SORTCOL,
-	SEL_STACKMODE,
-}action_t;
-
-typedef enum {
-    STACK_DELFILE = 1,
-    STACK_DELDIR,
-    STACK_RENAMEFILE,
-    STACK_RENAMEDIR,
-    STACK_MOVEFILE,
-    STACK_MOVEDIR,
-    STACK_MAKEDIR,
-    STACK_TOUCHFILE,
-    STACK_COPYFILE,
-    STACK_COPYDIR,
-    STACK_PUSHCOLCWD,
-    STACK_PUSHCOLCURDIR,
-    STACK_PUSHCOLCURFILE,
-    STACK_SWAPFILE,
-    STACK_SWAPDIR,
-    STACK_DROPDIR,
-    STACK_DROPFILE,
-    STACK_DUPDIR,
-    STACK_DUPFILE,
-    STACK_OVERDIR,
-    STACK_OVERFILE,
-    STACK_ROTDIR,
-    STACK_ROTFILE,
-    STACK_PICKDIR,
-    STACK_PICKFILE,
-    STACK_SHOWCWDSEL,
-    STACK_NORMALMODE,
-}stack_mode_action_t;
-
-typedef enum {
-    SYS_RMFILE,
-    SYS_RMDIR,
-    SYS_RENAME,
-    SYS_MOVE,
-    SYS_MKDIR,
-    SYS_TOUCH,
-    SYS_COPYFILE,
-    SYS_COPYDIR,
-}sysfileops_type_t;
-
-typedef struct {
-    sysfileops_type_t type;
-    char* bin;
-}sysfileops_t;
-
-typedef struct {
-	int sym;         /* Key pressed */
-	action_t act; /* Action */
-	char *run;       /* Program to run */
-	char *env;       /* Environment variable to run */
-}yf_key_t;
-
-typedef struct {
-    int sym;
-    stack_mode_action_t act;
-}yf_smkey_t;
-
-typedef struct {
-    int enumc;
-    char keyp;
-}key_out_t;
-
-typedef enum {
-    DEFAULT_FILE_OPS,
-    USE_SYSTEM_BINARIES,
-    BRUTEFORCE666
-}file_ops_styles_t;
-
-typedef enum {
-    YF_VIEW,
-    YF_EDIT,
-    YF_RUN
-}default_behaviour_types_t;
-
+#include "yesfire.h"
 #include "config.h"
-typedef struct {
-	char name[PATH_MAX];
-	time_t t;
-	mode_t mode;
-	char notify;
-	char dummy;
-}entry_t;
-
-typedef struct {
-    int ndents,cur,total_notifications;
-    entry_t *dents;
-    char path[PATH_MAX], oldpath[PATH_MAX], newpath[PATH_MAX];
-}column_t;
-
-
-#define MAX_STATUS_LINE 128
-typedef struct {
-    column_t cols[MAX_COLS];
-    short curcol, totalcols;
-    int idle;
-    time_t lastupdatetimestamp;
-
-	char fltr[LINE_MAX];
-	char fastdir[PATH_MAX];
-
-    entry_t directory_stack;
-    entry_t files_stack;
-
-    char status_line[MAX_STATUS_LINE];
-}filemanager_t;
 
 static char* user_strings[] = {
     "error opening terminal: %s\n",
@@ -209,33 +11,15 @@ static char* user_strings[] = {
     "Unsupported file",
     "filter(aka regex): ",
     "Change dir where?: ",
-    "Yesfire 42.0: Some men just want to watch the fil(r)es OPENED.\n",
+    "Yesfire 42.0: Some men just want to watch the fil(r)es OPENED. Build Date: %s\n",
     "usage: %s [-e stack_mode_command] [-c num_cols] [dir 0] ... [dir %d]\n",
     "stdin or stdout is not a tty\n",
     "wrong cols number, must be in [1..%d]\n",
 };
 
-typedef enum {
-    STR_ERR_TERMINAL_OPEN,
-    STR_ERR_CURSES_INIT_FAILED,
-    STR_ERR_RESIZE_FAILED,
-    STR_ERR_RESIZE_FAILED2,
-    STR_ERROR_NO_ASSOC,
-    STR_ERR_UNSUPPORTED_FILE,
-    STR_PROMPT_REGEX,
-    STR_PROMPT_CD,
-    STR_VERSION,
-    STR_USAGE,
-    STR_ERR_NOTATTY,
-    STR_ERR_COLS_ARG_FAILED
-}user_strings_list_t;
-
-void printmsg(char *);
-void printwarn(void);
-void printerr(int, char *);
 
 static filemanager_t*
-get_filemanager()
+get_filemanager(void)
 {
     static filemanager_t fire;
     return &fire;
@@ -278,10 +62,41 @@ getcurrentrymode(filemanager_t* fm)
 
 
 static int
-gettotalcols()
+gettotalcols(void)
 {
     filemanager_t* fm = get_filemanager();
     return fm->totalcols;
+}
+
+/* Messages show up at the bottom */
+void
+printmsg(char *msg)
+{
+	move(LINES - 1, 0);
+	printw("%s\n", msg);
+}
+
+/* Display warning as a message */
+void
+printwarn(void)
+{
+	printmsg(strerror(errno));
+}
+
+
+void
+exitcurses(void)
+{
+	endwin(); /* Restore terminal */
+}
+
+/* Kill curses and display error before exiting */
+void
+printerr(int ret, char *prefix)
+{
+	exitcurses();
+	fprintf(stderr, "%s: %s\n", prefix, strerror(errno));
+	exit(ret);
 }
 
 
@@ -474,7 +289,7 @@ openwith(char *file)
 			    REG_NOSUB | REG_EXTENDED | REG_ICASE) != 0)
 			continue;
 		if (regexec(&regex, file, 0, NULL, 0) == 0) {
-			bin = assocs_view[i].bin[0];
+			bin =  assocs_view[i].bin[0];
 			regfree(&regex);
 			break;
 		}
@@ -555,35 +370,7 @@ initcurses(int totalcols)
 	timeout(1000); /* One second */
 }
 
-void
-exitcurses(void)
-{
-	endwin(); /* Restore terminal */
-}
 
-/* Messages show up at the bottom */
-void
-printmsg(char *msg)
-{
-	move(LINES - 1, 0);
-	printw("%s\n", msg);
-}
-
-/* Display warning as a message */
-void
-printwarn(void)
-{
-	printmsg(strerror(errno));
-}
-
-/* Kill curses and display error before exiting */
-void
-printerr(int ret, char *prefix)
-{
-	exitcurses();
-	fprintf(stderr, "%s: %s\n", prefix, strerror(errno));
-	exit(ret);
-}
 
 /* Clear the last line */
 void
@@ -612,25 +399,38 @@ int xgetch(void)
 	return c;
 }
 
-/* Returns SEL_* if key is bound and 0 otherwise.
- * Also modifies the run and env pointers (used on SEL_{RUN,RUNARG}) */
-key_out_t
-nextsel(char **run, char **env)
+yf_key_t
+nextact(global_ui_state_t mode)
 {
 	int c, i;
-	key_out_t out;
+	yf_key_t out;
 
 	c = xgetch();
 	if (c == 033)
 		c = META(xgetch());
+    out.nm = 0;
+    out.sm = 0;
+    out.bb = 0;
+    if (mode == NORMAL_MODE) {
+        for (i = 0; i < LEN(bindings); i++)
+            if (c == bindings[i].sym) {
+                out.nm = bindings[i].nm;
+            }
+        for (i = 0; i < LEN(binbindings); i++)
+            if (c == binbindings[i].key) {
+                out.bb = i;
+                out.nm = SEL_BINBINDING;
+            }
+    }
 
-	for (i = 0; i < LEN(bindings); i++)
-		if (c == bindings[i].sym) {
-			*run = bindings[i].run;
-			*env = bindings[i].env;
-			out.enumc = bindings[i].act;
-		}
-	out.keyp = c;
+    if (mode == STACK_MODE) {
+        for (i = 0; i < LEN(smbindings); i++)
+            if (c == smbindings[i].sym) {
+                out.sm = smbindings[i].sm;
+            }
+    }
+
+	out.sym = c;
 	return out;
 }
 
@@ -999,12 +799,12 @@ populate_current(filemanager_t* fm)
     return;
 }
 
-void
-addcol(filemanager_t* fm)
+int
+fm_addcol(filemanager_t* fm)
 {
     column_t* curcol = getcurrentcolumn(fm);
     column_t* cols = fm->cols;
-    if (COLS/(fm->totalcols+1) < 20) {  return; }
+    if (COLS/(fm->totalcols+1) < 20) {  return 0; }
     int i;
     if ((fm->totalcols  < MAX_COLS)) {
         if (curcol->ndents==0) {
@@ -1015,11 +815,11 @@ addcol(filemanager_t* fm)
             int r = populate(cols[fm->totalcols].path, cols[fm->totalcols].oldpath, fm->fltr, fm->totalcols);
             if (r == -1) {
                 printwarn();
-                return;
+                return 0;
             }
             fm->curcol = fm->totalcols;
             fm->totalcols++;
-            return;
+            return 0;
         }
         if (!S_ISDIR(getcurrentrymode(fm))) {
             for (i=0;i<PATH_MAX;++i) {
@@ -1034,17 +834,17 @@ addcol(filemanager_t* fm)
         int r = populate(cols[fm->totalcols].path, cols[fm->totalcols].oldpath, fm->fltr, fm->totalcols);
         if (r == -1) {
             printwarn();
-            return;
+            return 0;
         }
         fm->curcol = fm->totalcols;
         fm->totalcols++;
 
         }
-        return;
+        return 1;
 }
 
-void
-removecol(filemanager_t* fm)
+int
+fm_removecol(filemanager_t* fm)
 {
     int i,j;
     if (fm->totalcols > 1) {
@@ -1067,7 +867,7 @@ removecol(filemanager_t* fm)
         fm->cols[fm->totalcols].dents=NULL;
         fm->totalcols--;
     }
-    return;
+    return 1;
 }
 
 int
@@ -1112,13 +912,12 @@ remove_notification(filemanager_t* fm)
     return;
 }
 
-void
-sortcols(filemanager_t* fm)
+int
+fm_sortcols(filemanager_t* fm)
 {
-    int i, need_sort;
-    int j;
-    need_sort = 0;
-    for (i = 0; i< fm->totalcols ; ++i)
+    int i;
+    int need_sort = 0;
+    for (i = 0; i< fm->totalcols; ++i)
         need_sort += update_col(fm, i);
 
     if (need_sort) {
@@ -1127,16 +926,19 @@ sortcols(filemanager_t* fm)
         fm->curcol = 0;
         fm->cols[fm->curcol].cur=0;
         remove_notification(fm);
+        return 1;
     }
 
-    return;
+    return 0;
 }
 
 static void
 initfm (filemanager_t* fm, char *ipath[MAX_COLS], char *ifilter, int totalcols)
 {
+    fm->mode = NORMAL_MODE;
     fm->totalcols = totalcols;
     fm->lastupdatetimestamp = time(NULL);
+    fm->ifilter = ifilter;
     size_t i = 0;
     size_t j = 0;
     for (i=0;i<LINE_MAX;++i) {
@@ -1169,278 +971,570 @@ initfm (filemanager_t* fm, char *ipath[MAX_COLS], char *ifilter, int totalcols)
     return;
 }
 
+
+int
+diediediemydarling(filemanager_t* fm, int curses_too)
+{
+    int i;
+	for (i=0;i<fm->totalcols;++i) {
+	    dentfree(fm->cols[i].dents); fm->cols[i].dents= NULL;
+	}
+
+	if (curses_too) exitcurses();
+
+	exit(0);
+
+    return 0;
+}
+
+int
+fm_prev_dir(filemanager_t*fm, column_t* curcol)
+{
+    char* ifilter = fm->ifilter;
+    /* There is no going back */
+    if (strcmp(curcol->path, "/") == 0 ||
+        strcmp(curcol->path, ".") == 0 ||
+        strchr(curcol->path, '/') == NULL)
+        return 0;
+    char* dir = xdirname(curcol->path);
+    if (canopendir(dir) == 0) {
+        printwarn();
+        return 0;
+    }
+    /* Save history */
+    strlcpy(curcol->oldpath, curcol->path, sizeof(curcol->oldpath));
+    strlcpy(curcol->path, dir, sizeof(curcol->path));
+    /* Reset filter */
+    strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
+    populate_current(fm);
+    return 1;
+}
+
+int
+fm_next_dir(filemanager_t* fm, column_t* curcol)
+{
+    /* Cannot descend in empty directories */
+    if (fm->cols[fm->curcol].ndents == 0)
+        return 0;
+
+    mkpath(curcol->path, getcurrentryname(fm), curcol->newpath, sizeof(curcol->newpath));
+    DPRINTF_S(curcol->newpath);
+
+    int r, fd;
+    struct stat sb;
+    char* bin, *env;
+    /* Get path info */
+    fd = open(curcol->newpath, O_RDONLY | O_NONBLOCK);
+    if (fd == -1) {
+        printwarn();
+        return 0;
+    }
+    r = fstat(fd, &sb);
+    if (r == -1) {
+        printwarn();
+        close(fd);
+        return 0;
+    }
+    close(fd);
+    DPRINTF_U(sb.st_mode);
+
+    int fl = 0;
+    switch (sb.st_mode & S_IFMT) {
+    case S_IFDIR:
+
+        if (canopendir(curcol->newpath) == 0) {
+            printwarn();
+            break;
+        }
+        strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
+        /* Reset filter */
+        strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr));
+
+        populate_current(fm);
+        fl = 1; break;
+    case S_IFREG:
+        bin = openwith(curcol->newpath);
+        if (bin == NULL) {
+            printmsg(user_strings[STR_ERROR_NO_ASSOC]);
+            break;
+        }
+        exitcurses();
+        spawn(bin, curcol->newpath, NULL);
+        initcurses(fm->totalcols);
+        fl = 1;
+        break;
+    default:
+        printmsg(user_strings[STR_ERR_UNSUPPORTED_FILE]);
+        break;
+    }
+
+    return fl;
+}
+
+int
+fm_fltr_nonblock(filemanager_t* fm, column_t* curcol)
+{
+    /* Read filter */
+    printprompt(user_strings[STR_PROMPT_REGEX]);
+    char* ifilter = fm->ifilter;
+    char* tmp = readln();
+    if (tmp == NULL)
+        tmp = ifilter;
+    /* Check and report regex errors */
+    regex_t re;
+    int r = setfilter(&re, tmp);
+    if (r != 0)
+        return 0;
+    freefilter(&re);
+    strlcpy(fm->fltr, tmp, sizeof(fm->fltr));
+    DPRINTF_S(fm->fltr);
+    /* Save current */
+    if (curcol->ndents > 0)
+        mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
+
+
+
+    populate_current(fm);
+    return 1;
+
+}
+
+
+int
+fm_next_entry(filemanager_t* fm, column_t* curcol)
+{
+    if (curcol->ndents!=0) {
+        if (curcol->ndents - 1 == curcol->cur)
+        {  curcol->cur= 0; remove_notification(fm);  return 1; }
+
+        if (curcol->cur < curcol->ndents - 1)
+            curcol->cur++;
+        remove_notification(fm);
+    }
+    return 1;
+}
+
+int
+fm_prev_entry(filemanager_t* fm, column_t* curcol)
+{
+    if (curcol->ndents!=0) {
+        if (0==curcol->cur)
+                curcol->cur= curcol->ndents;
+
+        if (curcol->cur > 0)
+            curcol->cur--;
+        remove_notification(fm);
+    }
+    return 1;
+}
+
+int
+fm_pageup(column_t* curcol)
+{
+    if (curcol->cur > 0)
+        curcol->cur -= MIN((LINES - 4) / 2, curcol->cur);
+    return 1;
+}
+
+int
+fm_pagedown(column_t* curcol)
+{
+    if (curcol->cur < curcol->ndents - 1)
+        curcol->cur += MIN((LINES - 4) / 2, curcol->ndents - 1 - curcol->cur);
+    return 1;
+}
+
+int
+fm_home(column_t* curcol)
+{
+    curcol->cur = 0;
+    return 1;
+}
+
+int
+fm_end(column_t* curcol)
+{
+    curcol->cur = curcol->ndents - 1;
+    return 1;
+}
+
+int
+fm_cd(filemanager_t* fm, column_t* curcol)
+{
+    /* Read target dir */
+    printprompt(user_strings[STR_PROMPT_CD]);
+    char* tmp = readln();
+    if (tmp == NULL) {
+        clearprompt();
+        return 0;
+    }
+    mkpath(curcol->path, tmp, curcol->path, sizeof(curcol->newpath));
+    if (canopendir(curcol->newpath) == 0) {
+        printwarn();
+        return 0;
+    }
+    strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
+    /* Reset filter */
+    strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr))
+    DPRINTF_S(curcol->path);
+
+    populate_current(fm);
+    return 1;
+}
+
+int
+fm_fastdir(filemanager_t* fm, column_t* curcol, char key)
+{
+    char numcode = key - '0';
+    if ((numcode >=0) && (numcode <10)) {
+        strlcpy(fm->fastdir,fast_dirs[numcode], sizeof(fast_dirs[numcode]));
+
+        mkpath(curcol->path, fm->fastdir, curcol->newpath, sizeof(curcol->newpath));
+        if (canopendir(curcol->newpath) == 0) {
+            printwarn();
+            return 0;
+        }
+        strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
+        /* Reset filter */
+        strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr))
+        DPRINTF_S(path);
+        populate_current(fm);
+    }
+    return 1;
+}
+
+int
+fm_cdhome(filemanager_t* fm, column_t* curcol)
+{
+    char* tmp = getenv("HOME");
+    if (tmp == NULL) {
+        clearprompt();
+        return 0;
+    }
+    if (canopendir(tmp) == 0) {
+        printwarn();
+        return 0;
+    }
+    strlcpy(curcol->path, tmp, sizeof(curcol->path));
+    /* Reset filter */
+    strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr));
+    DPRINTF_S(curcol->path);
+
+    populate_current(fm);
+    return 1;
+}
+
+
+int
+fm_togglehidden(filemanager_t* fm)
+{
+    showhidden ^= 1;
+    initfilter(showhidden, &fm->ifilter);
+    strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr));
+
+    populate_current(fm);
+    return 1;
+}
+
+int
+fm_togglemtime(filemanager_t* fm, column_t* curcol)
+{
+    mtimeorder = !mtimeorder;
+    /* Save current */
+    if (curcol->ndents > 0)
+        mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
+
+    populate_current(fm);
+    return 1;
+
+}
+
+int
+fm_forceredraw(filemanager_t* fm, column_t* curcol)
+{
+    /* Save current */
+    if (curcol->ndents > 0)
+        mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
+
+    populate_current(fm);
+    return 1;
+}
+
+
+int
+fm_run(filemanager_t* fm, column_t* curcol)
+{
+    return 1;
+}
+
+
+int
+fm_view(filemanager_t* fm)
+{
+    return 0;
+}
+
+int
+fm_edit(filemanager_t* fm)
+{
+    return 0;
+}
+
+int
+fm_shell(filemanager_t* fm, column_t* curcol)
+{
+    exitcurses();
+    spawn(xgetenv("SHELL", favourite_shell), NULL, curcol->path);
+    initcurses(fm->totalcols);
+    return 1;
+}
+
+int
+fm_binbinding(filemanager_t* fm, column_t* curcol, int i)
+{
+   	exitcurses();
+   	spawn(binbindings[i].bin, NULL, curcol->path);
+   	initcurses(fm->totalcols);
+    return 1;
+}
+
+int
+fm_next_col(filemanager_t* fm)
+{
+    (fm->curcol < fm->totalcols - 1) ? (fm->curcol++) : (fm->curcol = 0);
+    return 1;
+}
+
+int
+fm_prev_col(filemanager_t* fm)
+{
+    (fm->curcol == 0) ? (fm->curcol = fm->totalcols - 1): (fm->curcol--) ;
+    return 1;
+}
+
+int
+fm_tostackmode(filemanager_t* fm)
+{
+    return 1;
+}
+
+update_state_t
+normal_mode_handler(filemanager_t* fm, column_t* curcol, yf_key_t key)
+{
+    int s = 0;
+    action_t what = key.nm;
+    switch (what) {
+        case SEL_QUIT:
+            s = diediediemydarling(fm, 1);
+            break;
+        case SEL_BACK:
+            s = fm_prev_dir(fm, curcol);
+            break;
+        case SEL_GOIN:
+            s = fm_next_dir(fm, curcol);
+            break;
+        case SEL_FLTR:
+            s = fm_fltr_nonblock(fm, curcol);
+            break;
+        case SEL_NEXT:
+            s = fm_next_entry(fm, curcol);
+            break;
+        case SEL_PREV:
+            s = fm_prev_entry(fm, curcol);
+            break;
+        case SEL_PGDN:
+            s = fm_pagedown(curcol);
+            break;
+        case SEL_PGUP:
+            s = fm_pageup(curcol);
+            break;
+        case SEL_HOME:
+            s = fm_home(curcol);
+            break;
+        case SEL_END:
+            s = fm_end(curcol);
+            break;
+        case SEL_CD:
+            s = fm_cd(fm, curcol);
+            break;
+        case SEL_FASTDIR:
+            s = fm_fastdir(fm,curcol, key.sym);
+            break;
+        case SEL_CDHOME:
+            s = fm_cdhome(fm, curcol);
+            break;
+        case SEL_TOGGLEDOT:
+            s = fm_togglehidden(fm);
+            break;
+        case SEL_MTIME:
+            s = fm_togglemtime(fm, curcol);
+            break;
+        case SEL_REDRAW:
+            s = fm_forceredraw(fm, curcol);
+            break;
+        case SEL_RUN:
+            s = fm_run(fm,curcol);
+            break;
+        case SEL_VIEW:
+            s = fm_view(fm);
+            break;
+        case SEL_EDIT:
+            s = fm_edit(fm);
+            break;
+        case SEL_SHELL:
+            s = fm_shell(fm, curcol);
+            break;
+        case SEL_NEXTCOL:
+            s = fm_next_col(fm);
+            break;
+        case SEL_PREVCOL:
+            s = fm_prev_col(fm);
+            break;
+        case SEL_ADDCOL:
+            s = fm_addcol(fm);
+            break;
+        case SEL_REMOVECOL:
+            s = fm_removecol(fm);
+            break;
+        case SEL_SORTCOL:
+            s = fm_sortcols(fm);
+            break;
+        case SEL_STACKMODE:
+            s = fm_tostackmode(fm);
+            break;
+        case SEL_BINBINDING:
+            s = fm_binbinding(fm, curcol, key.bb);
+            break;
+
+        default:
+            s = 0;
+            break;
+        }
+        if ((autosorttimeout!=0) && (fm->idle % autosorttimeout == autosorttimeout/2)) {
+            fm_sortcols(fm);
+        }
+        return (update_state_t) s;
+}
+
+update_state_t
+stack_mode_handler(filemanager_t* fm, yf_key_t key)
+{
+    stack_mode_action_t what = key.sm;
+    switch (what) {
+        case STACK_DELFILE:
+            break;
+        case STACK_DELDIR:
+            break;
+        case STACK_RENAMEFILE:
+            break;
+        case STACK_RENAMEDIR:
+            break;
+        case STACK_MOVEFILE:
+            break;
+        case STACK_MOVEDIR:
+            break;
+        case STACK_MAKEDIR:
+            break;
+        case STACK_TOUCHFILE:
+            break;
+        case STACK_COPYFILE:
+            break;
+        case STACK_COPYDIR:
+            break;
+        case STACK_PUSHCOLCWD:
+            break;
+        case STACK_PUSHCOLCURDIR:
+            break;
+        case STACK_PUSHCOLCURFILE:
+            break;
+        case STACK_SWAPFILE:
+            break;
+        case STACK_SWAPDIR:
+            break;
+        case STACK_DROPDIR:
+            break;
+        case STACK_DROPFILE:
+            break;
+        case STACK_DUPDIR:
+            break;
+        case STACK_DUPFILE:
+            break;
+        case STACK_OVERDIR:
+            break;
+        case STACK_OVERFILE:
+            break;
+        case STACK_ROTDIR:
+            break;
+        case STACK_ROTFILE:
+            break;
+        case STACK_PICKDIR:
+            break;
+        case STACK_PICKFILE:
+            break;
+        case STACK_SHOWCWDSEL:
+            break;
+        case STACK_NORMALMODE:
+            break;
+        default:
+            break;
+    }
+    return NOTHING_CHANGES;
+}
+
+int
+detect_resize(void)
+{
+    static int x = 0;
+    static int y = 0;
+    if ((COLS != x) || (LINES !=y)) {
+        x = COLS;
+        y = LINES;
+        return 1;
+    }
+    return 0;
+}
+
+#define ETERNITY for(;;)
 void
 browse(char *ipath[MAX_COLS], char *ifilter, int totalcols)
 {
-    key_out_t nextkey;
-    int numcode = 0;
-	char *bin, *dir, *tmp, *run, *env;
-	struct stat sb;
-	regex_t re;
-	int r, fd;
-	size_t i = 0;
     filemanager_t* fm = get_filemanager();
     initfm(fm, ipath, ifilter, totalcols);
-begin:
-   	for (;;) {
-    column_t* curcol = getcurrentcolumn(fm);
-		redraw(fm);
-nochange:
-        nextkey = nextsel(&run, &env);
-        switch (nextkey.enumc) {
-		case SEL_QUIT:
-		    for (i=0;i<totalcols;++i)
-            { dentfree(fm->cols[i].dents); fm->cols[i].dents= NULL; }
-			return;
-		case SEL_BACK:
-			/* There is no going back */
-			if (strcmp(curcol->path, "/") == 0 ||
-			    strcmp(curcol->path, ".") == 0 ||
-			    strchr(curcol->path, '/') == NULL)
-				goto nochange;
-			dir = xdirname(curcol->path);
-			if (canopendir(dir) == 0) {
-				printwarn();
-				goto nochange;
-			}
-			/* Save history */
-			strlcpy(curcol->oldpath, curcol->path, sizeof(curcol->oldpath));
-			strlcpy(curcol->path, dir, sizeof(curcol->path));
-			/* Reset filter */
-			strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
-            populate_current(fm);
-			goto begin;
-		case SEL_GOIN:
-			/* Cannot descend in empty directories */
-			if (fm->cols[fm->curcol].ndents == 0)
-				goto nochange;
+    int update_flag = NEEDS_REDRAW;
+   	ETERNITY {
+        column_t* curcol = getcurrentcolumn(fm);
+        global_ui_state_t mode = fm->mode;
+		if (update_flag == NEEDS_REDRAW) redraw(fm);
 
-			mkpath(curcol->path, getcurrentryname(fm), curcol->newpath, sizeof(curcol->newpath));
-			DPRINTF_S(curcol->newpath);
-
-			/* Get path info */
-			fd = open(curcol->newpath, O_RDONLY | O_NONBLOCK);
-			if (fd == -1) {
-				printwarn();
-				goto nochange;
-			}
-			r = fstat(fd, &sb);
-			if (r == -1) {
-				printwarn();
-				close(fd);
-				goto nochange;
-			}
-			close(fd);
-			DPRINTF_U(sb.st_mode);
-
-			switch (sb.st_mode & S_IFMT) {
-			case S_IFDIR:
-				if (canopendir(curcol->newpath) == 0) {
-					printwarn();
-					goto nochange;
-				}
-				strlcpy(curcol->path, curcol->path, sizeof(curcol->path));
-				/* Reset filter */
-				strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
-
-            populate_current(fm);
-				goto begin;
-			case S_IFREG:
-				bin = openwith(curcol->newpath);
-				if (bin == NULL) {
-					printmsg(user_strings[STR_ERROR_NO_ASSOC]);
-					goto nochange;
-				}
-				exitcurses();
-				spawn(bin, curcol->newpath, NULL);
-				initcurses(fm->totalcols);
-				continue;
-			default:
-				printmsg(user_strings[STR_ERR_UNSUPPORTED_FILE]);
-				goto nochange;
-			}
-		case SEL_FLTR:
-			/* Read filter */
-			printprompt(user_strings[STR_PROMPT_REGEX]);
-			tmp = readln();
-			if (tmp == NULL)
-				tmp = ifilter;
-			/* Check and report regex errors */
-			r = setfilter(&re, tmp);
-			if (r != 0)
-				goto nochange;
-			freefilter(&re);
-			strlcpy(fm->fltr, tmp, sizeof(fm->fltr));
-			DPRINTF_S(fm->fltr);
-			/* Save current */
-			if (curcol->ndents > 0)
-				mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
-
-
-
-            populate_current(fm);
-			goto begin;
-		case SEL_NEXT:
-		    if (curcol->ndents!=0) {
-                if (curcol->ndents - 1 == curcol->cur)
-                {  curcol->cur= 0; remove_notification(fm); break; }
-
-                if (curcol->cur < curcol->ndents - 1)
-                    curcol->cur++;
-                remove_notification(fm);
-            }
-			break;
-		case SEL_PREV:
-		    if (curcol->ndents!=0) {
-                if (0==curcol->cur)
-                     curcol->cur= curcol->ndents;
-
-                if (curcol->cur > 0)
-                    curcol->cur--;
-                remove_notification(fm);
-            }
-			break;
-		case SEL_PGDN:
-			if (curcol->cur < curcol->ndents - 1)
-				curcol->cur += MIN((LINES - 4) / 2, curcol->ndents - 1 - curcol->cur);
-			break;
-		case SEL_PGUP:
-			if (curcol->cur > 0)
-				curcol->cur -= MIN((LINES - 4) / 2, curcol->cur);
-			break;
-		case SEL_HOME:
-			curcol->cur = 0;
-			break;
-		case SEL_END:
-			curcol->cur = curcol->ndents - 1;
-			break;
-		case SEL_CD:
-			/* Read target dir */
-			printprompt(user_strings[STR_PROMPT_CD]);
-			tmp = readln();
-			if (tmp == NULL) {
-				clearprompt();
-				goto nochange;
-			}
-			mkpath(curcol->path, tmp, curcol->path, sizeof(curcol->newpath));
-			if (canopendir(curcol->newpath) == 0) {
-				printwarn();
-				goto nochange;
-			}
-			strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
-			/* Reset filter */
-			strlcpy(fm->fltr, ifilter, sizeof(fm->fltr))
-			DPRINTF_S(curcol->path);
-
-            populate_current(fm);
-			goto begin;
-        case SEL_FASTDIR:
-            numcode = nextkey.keyp - '0';
-			if ((numcode >=0) && (numcode <10)) {
-				strlcpy(fm->fastdir,fast_dirs[numcode], sizeof(tmp));
-
-				mkpath(curcol->path, fm->fastdir, curcol->newpath, sizeof(curcol->newpath));
-				if (canopendir(curcol->newpath) == 0) {
-					printwarn();
-					goto nochange;
-				}
-				strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
-				/* Reset filter */
-				strlcpy(fm->fltr, ifilter, sizeof(fm->fltr))
-				DPRINTF_S(path);
-				populate_current(fm);
-			}
-			goto begin;
-            break;
-		case SEL_CDHOME:
-			tmp = getenv("HOME");
-			if (tmp == NULL) {
-				clearprompt();
-				goto nochange;
-			}
-			if (canopendir(tmp) == 0) {
-				printwarn();
-				goto nochange;
-			}
-			strlcpy(curcol->path, tmp, sizeof(curcol->path));
-			/* Reset filter */
-			strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
-			DPRINTF_S(curcol->path);
-
-            populate_current(fm);
-			goto begin;
-		case SEL_TOGGLEDOT:
-			showhidden ^= 1;
-			initfilter(showhidden, &ifilter);
-			strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
-
-            populate_current(fm);
-
-			goto begin;
-		case SEL_MTIME:
-			mtimeorder = !mtimeorder;
-			/* Save current */
-			if (curcol->ndents > 0)
-				mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
-
-            populate_current(fm);
-			goto begin;
-		case SEL_REDRAW:
-			/* Save current */
-			if (curcol->ndents > 0)
-				mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
-
-            populate_current(fm);
-			goto begin;
-		case SEL_RUN:
-			run = xgetenv(env, run);
-			exitcurses();
-			spawn(run, NULL, curcol->path);
-			initcurses(fm->totalcols);
-			break;
-		case SEL_RUNARG:
-			run = xgetenv(env, run);
-			exitcurses();
-			spawn(run, getcurrentryname(fm), curcol->path);
-			initcurses(fm->totalcols);
-			break;
-        case SEL_NEXTCOL:
-            (fm->curcol < fm->totalcols - 1) ? (fm->curcol++) : (fm->curcol = 0);
-            break;
-        case SEL_PREVCOL:
-            (fm->curcol == 0) ? (fm->curcol = fm->totalcols - 1): (fm->curcol--) ;
-            break;
-        case SEL_ADDCOL:
-             addcol(fm);
-            break;
-        case SEL_REMOVECOL:
-            removecol(fm);
-            break;
-        case SEL_SORTCOL:
-            sortcols(fm);
-            break;
-
-		default:
-		    break;
-		}
+        yf_key_t key = nextact(mode);
+        switch (mode) {
+            case NORMAL_MODE:
+                update_flag = normal_mode_handler(fm, curcol, key);
+                break;
+            case STACK_MODE:
+                update_flag = stack_mode_handler(fm, key);
+                break;
+            default:
+                update_flag = NOTHING_CHANGES;
+                break;
+        }
+        if (update_flag == NOTHING_CHANGES)
+            update_flag = (update_state_t) detect_resize();
 		/* Screensaver */
-		if (idletimeout != 0 && fm->idle == idletimeout) {
+		if ((idletimeout != 0) && (fm->idle == idletimeout)) {
 			fm->idle = 0;
 			exitcurses();
 			spawn(idlecmd, NULL, NULL);
 			initcurses(fm->totalcols);
 		}
 
-		if ((autosorttimeout!=0) && (fm->idle % autosorttimeout == autosorttimeout/2)) {
-            sortcols(fm);
-        }
 	}
 }
 
 static void
-version()
+version(void)
 {
-    fprintf(stdout, "%s", user_strings[STR_VERSION]);
+    fprintf(stdout, user_strings[STR_VERSION], __DATE__);
     exit(1);
 }
 

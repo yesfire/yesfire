@@ -118,6 +118,9 @@ So if you working from /home/%username% folder then:
 
          "hhd1$D" is rm -rf / equivalent.
 
+Also you can run it with -e option to instantly execute file operation in STACK MODE
+without loading interface and treating rest args as directory and file stack.
+
 That's it.
 
 
