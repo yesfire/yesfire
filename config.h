@@ -17,7 +17,7 @@ int showhidden  = 1; /* Set to 1 to show hidden files by default */
 
 char *favourite_shell = "zsh"; /* Your favourite shell */
 char *idlecmd   = "screenfetch"; /* The screensaver program */
-char* status_line_format = "$MDATE $NAME $OWNER $PERMISSION $SIZE :ereht era yehT"; /* */
+char* status_line_format = "$MDATE $NAME $OWNER $PERMISSION $SIZE $COUNTER:ereht era yehT"; /* */
 
 #define NCOLS 4 /* Default number of columns */
 #define STACK_SIZE 500 /* Max stack size for STACK MODE*/
@@ -163,9 +163,11 @@ yf_key_t bindings[] = {
 };
 
 binbinding_t binbindings[] = {
-    {'z', "htop"},
-    {'m', "mutt"},
-    {'M', "irssi"},
+    {'z', "htop", NO_FLAG},
+    {'Z', "ps -aux", PIPE_TO_VIEWER},
+    {'m', "mutt", NO_FLAG},
+    {'M', "irssi", NO_FLAG},
+    {'@', "yesfire", NO_FLAG},
 
 };
 

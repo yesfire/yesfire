@@ -17,6 +17,12 @@ static char* user_strings[] = {
     "wrong cols number, must be in [1..%d]\n",
 };
 
+static char* used_env_vars[] = {
+    "SHELL",
+    "TERM",
+    "HOME",
+    "FIRE_DEPTH",
+};
 
 static filemanager_t*
 get_filemanager(void)
@@ -24,6 +30,241 @@ get_filemanager(void)
     static filemanager_t fire;
     return &fire;
 }
+
+YF_WRAP_CALL yfw_pid_t_t
+yfw_fork()
+{
+    return fork();
+};
+YF_WRAP_CALL char*
+yfw_getenv(const char* name)
+{
+    return getenv(name);
+};
+YF_WRAP_CALL int
+yfw_setenv(const char* name, const char* value, int overwrite)
+{
+    return setenv(name, value ,overwrite);
+};
+YF_WRAP_CALL yfw_uid_t_t
+yfw_getuid(void)
+{
+    return getuid();
+};
+YF_WRAP_CALL int
+yfw_open(const char *pathname, int flags)
+{
+    return open(pathname, flags);
+};
+
+YF_WRAP_CALL yfw_ssize_t_t
+yfw_write(int fd, const void *buf, size_t count) {
+    return yfw_write(fd, buf, count);
+};
+
+YF_WRAP_CALL int
+yfw_close(int fd)
+{
+    return close(fd);
+};
+
+YF_WRAP_CALL int
+yfw_lstat(const char *file_name, yfw_stat_t *buf)
+{
+    return lstat(file_name, buf);
+};
+
+YF_WRAP_CALL int
+yfw_fstat(int fd, yfw_stat_t *buf)
+{
+    return fstat(fd, buf);
+};
+
+YF_WRAP_CALL int
+yfw_chdir(const char* path)
+{
+    return chdir(path);
+};
+#define MAX_ARGS 10
+YF_WRAP_CALL int
+yfw_execlp(const char *file, const char *arg, ...)
+{
+    int i = 1;
+    char* argv[MAX_ARGS];
+    char* ap;
+    argv[0] = file;
+
+    va_list argl;
+    va_start(argl, arg);
+    for (;;) {
+        ap = va_arg(argl, char*);
+        argv[i++] = ap;
+        if (ap == NULL) break;
+    }
+    va_end(argv);
+
+    return execvp(file, argv);
+};
+YF_WRAP_CALL yfw_pid_t_t
+yfw_waitpid(yfw_pid_t_t pid, int *status, int options )
+{
+    return waitpid(pid, status, options);
+};
+
+YF_WRAP_CALL int
+yfw_getopt(int argc, char * const argv[], const char *optstring)
+{
+    return getopt(argc, argv, optstring);
+};
+YF_WRAP_CALL char*
+yfw_getcwd(char *buf, size_t size)
+{
+    return getcwd(buf, size);
+};
+YF_WRAP_CALL int
+yfw_isatty(int fd)
+{
+    return isatty(fd);
+};
+YF_WRAP_CALL yfw_dir_t*
+yfw_opendir(const char* name)
+{
+    return opendir(name);
+};
+YF_WRAP_CALL yfw_dirent_t *
+yfw_readdir(yfw_dir_t* dirp)
+{
+    return readdir(dirp);
+};
+YF_WRAP_CALL int
+yfw_closedir(yfw_dir_t *dirp)
+{
+    return closedir(dirp);
+};
+
+YF_WRAP_CALL int
+yfw_regexec(const yfw_regex_t_t *preg, const char *string, size_t nmatch, yfw_regmatch_t_t pmatch[], int eflags)
+{
+    return regexec(preg, string, nmatch, pmatch, eflags);
+};
+YF_WRAP_CALL void
+yfw_regfree(yfw_regex_t_t* preg)
+{
+    return regfree(preg);
+};
+YF_WRAP_CALL int
+yfw_regcomp(yfw_regex_t_t *preg, const char *regex, int cflags)
+{
+    return regcomp(preg, regex, cflags);
+};
+YF_WRAP_CALL size_t
+yfw_regerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size)
+{
+
+    return regerror(errcode, preg, errbuf, errbuf_size);
+};
+
+YF_WRAP_CALL yfw_window_t*
+yfw_initscr(void)
+{
+    return initscr();
+};
+YF_WRAP_CALL int
+yfw_cbreak(void)
+{
+    return cbreak();
+};
+YF_WRAP_CALL int
+yfw_noecho(void)
+{
+    return noecho();
+};
+YF_WRAP_CALL int
+yfw_echo(void)
+{
+    return echo();
+};
+YF_WRAP_CALL int
+yfw_nonl(void)
+{
+    return nonl();
+};
+YF_WRAP_CALL int
+yfw_wgetnstr(yfw_window_t *win, char *str, int n)
+{
+    return wgetnstr(win, str, n);
+};
+YF_WRAP_CALL int
+yfw_intrflush(yfw_window_t* win, bool bf)
+{
+    return intrflush(win, bf);
+};
+YF_WRAP_CALL int
+yfw_keypad(yfw_window_t* win, bool bf)
+{
+    return keypad(win, bf);
+};
+YF_WRAP_CALL int
+yfw_curs_set(int visibility)
+{
+    return curs_set(visibility);
+};
+YF_WRAP_CALL void
+yfw_timeout(int delay)
+{
+    return timeout(delay);
+};
+YF_WRAP_CALL int
+yfw_move(int y, int x)
+{
+    return move(y, x);
+};
+YF_WRAP_CALL int
+yfw_printw(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    filemanager_t* fm = get_filemanager();
+    int out = vw_printw(fm->window, fmt, args);
+    va_end(args);
+
+    return out;
+};
+YF_WRAP_CALL int
+yfw_endwin(void)
+{
+    return endwin();
+};
+YF_WRAP_CALL int
+yfw_erase(void)
+{
+    return erase();
+};
+
+YF_WRAP_CALL int
+yfw_getch(void)
+{
+    return getch();
+};
+YF_WRAP_CALL int
+yfw_attron(int attrs)
+{
+    return attron(attrs);
+};
+
+YF_WRAP_CALL int
+yfw_attroff(int attrs)
+{
+    return attroff(attrs);
+};
+
+
+YF_WRAP_CALL char*
+yfw_dirname(char* path)
+{
+    return dirname(path);
+};
+
 
 static column_t*
 getcurrentcolumn(filemanager_t* fm)
@@ -68,15 +309,13 @@ gettotalcols(void)
     return fm->totalcols;
 }
 
-/* Messages show up at the bottom */
 void
 printmsg(char *msg)
 {
-	move(LINES - 1, 0);
-	printw("%s\n", msg);
+	yfw_move(YFW_LINES - 1, 0);
+	yfw_printw("%s\n", msg);
 }
 
-/* Display warning as a message */
 void
 printwarn(void)
 {
@@ -87,10 +326,9 @@ printwarn(void)
 void
 exitcurses(void)
 {
-	endwin(); /* Restore terminal */
+	yfw_endwin();
 }
 
-/* Kill curses and display error before exiting */
 void
 printerr(int ret, char *prefix)
 {
@@ -195,7 +433,7 @@ dprintf(int fd, const char *fmt, ...)
 	va_start(ap, fmt);
 	r = vsnprintf(buf, sizeof(buf), fmt, ap);
 	if (r > 0)
-		write(fd, buf, r);
+		yfw_write(fd, buf, r);
 	va_end(ap);
 	return r;
 }
@@ -240,30 +478,36 @@ xdirname(const char *path)
 	char tmp[PATH_MAX], *p;
 
 	strlcpy(tmp, path, sizeof(tmp));
-	p = dirname(tmp);
+	p = yfw_dirname(tmp);
 	if (p == NULL)
 		printerr(1, "dirname");
 	strlcpy(out, p, sizeof(out));
 	return out;
 }
 
-void
-spawn(char *file, char *arg, char *dir)
+static int
+spawn(const char *file, const char *arg, const char *dir)
 {
-	pid_t pid;
+    if (file == NULL) return 0;
+	yfw_pid_t_t pid;
 	int status;
-	pid = fork();
+	pid = yfw_fork();
 	if (pid == 0) {
-		if (dir != NULL)
-			chdir(dir);
-		execlp(file, file, arg, NULL);
+		if (dir != NULL) {
+			if (-1 == yfw_chdir(dir)) {
+			    printwarn();
+            }
+        }
+		yfw_execlp(file, file, arg, NULL);
 		_exit(1);
+
+
 	} else {
-		/* Ignore interruptions */
-		while (waitpid(pid, &status, 0) == -1)
+		while (yfw_waitpid(pid, &status, 0) == -1)
 			DPRINTF_D(status);
 		DPRINTF_D(pid);
 	}
+	return status;
 }
 
 char *
@@ -273,66 +517,68 @@ xgetenv(char *name, char *fallback)
 
 	if (name == NULL)
 		return fallback;
-	value = getenv(name);
+	value = yfw_getenv(name);
 	return value && value[0] ? value : fallback;
 }
 
 char *
 openwith(char *file)
 {
-	regex_t regex;
+	yfw_regex_t_t regex;
 	char *bin = NULL;
 	int i;
 
 	for (i = 0; i < LEN(assocs_view); i++) {
-		if (regcomp(&regex, assocs_view[i].regex,
-			    REG_NOSUB | REG_EXTENDED | REG_ICASE) != 0)
+		if (yfw_regcomp(&regex, assocs_view[i].regex,
+			    YFW_REG_NOSUB | YFW_REG_EXTENDED | YFW_REG_ICASE) != 0)
 			continue;
-		if (regexec(&regex, file, 0, NULL, 0) == 0) {
+		if (yfw_regexec(&regex, file, 0, NULL, 0) == 0) {
 			bin =  assocs_view[i].bin[0];
-			regfree(&regex);
+			yfw_regfree(&regex);
 			break;
 		}
-		regfree(&regex);
+		yfw_regfree(&regex);
 	}
 	DPRINTF_S(bin);
 	return bin;
 }
 
 int
-setfilter(regex_t *regex, char *filter)
+setfilter(yfw_regex_t_t *regex, char *filter)
 {
 	char errbuf[LINE_MAX];
 	size_t len;
 	int r;
 
-	r = regcomp(regex, filter, REG_NOSUB | REG_EXTENDED | REG_ICASE);
+	r = yfw_regcomp(regex, filter, YFW_REG_NOSUB | YFW_REG_EXTENDED | YFW_REG_ICASE);
 	if (r != 0) {
-		len = COLS;
+		len = YFW_COLS;
 		if (len > sizeof(errbuf))
 			len = sizeof(errbuf);
-		regerror(r, regex, errbuf, len);
+		yfw_regerror(r, regex, errbuf, len);
 		printmsg(errbuf);
 	}
 	return r;
 }
 
 void
-freefilter(regex_t *regex)
+freefilter(yfw_regex_t_t *regex)
 {
-	regfree(regex);
+	yfw_regfree(regex);
+	return;
 }
 
 void
 initfilter(int dot, char **ifilter)
 {
 	*ifilter = dot ? "." : "^[^.]";
+	return;
 }
 
 int
-visible(regex_t *regex, char *file)
+visible(yfw_regex_t_t *regex, char *file)
 {
-	return regexec(regex, file, 0, NULL, 0) == 0;
+	return yfw_regexec(regex, file, 0, NULL, 0) == 0;
 }
 
 int
@@ -349,49 +595,51 @@ void
 initcurses(int totalcols)
 {
 	char *term;
-
-	if (initscr() == NULL) {
-		term = getenv("TERM");
+    yfw_window_t* window = yfw_initscr();
+	if (window == NULL) {
+		term = yfw_getenv(used_env_vars[ENV_TERM]);
 		if (term != NULL)
 			fprintf(stderr,  user_strings[STR_ERR_TERMINAL_OPEN], term);
 		else
 			fprintf(stderr, "%s", user_strings[STR_ERR_CURSES_INIT_FAILED]);
 		exit(1);
 	}
-	if (COLS < 80) {fprintf(stderr,"%s", user_strings[STR_ERR_RESIZE_FAILED]); endwin(); exit(1);}
-	if (COLS/totalcols < 20) {fprintf(stderr, "%s", user_strings[STR_ERR_RESIZE_FAILED2]); endwin(); exit(1);}
+	if (YFW_COLS < 80) {fprintf(stderr,"%s", user_strings[STR_ERR_RESIZE_FAILED]); endwin(); exit(1);}
+	if (YFW_COLS/totalcols < 20) {fprintf(stderr, "%s", user_strings[STR_ERR_RESIZE_FAILED2]); endwin(); exit(1);}
 
-	cbreak();
-	noecho();
-	nonl();
-	intrflush(stdscr, FALSE);
-	keypad(stdscr, TRUE);
-	curs_set(FALSE); /* Hide cursor */
-	timeout(1000); /* One second */
+    filemanager_t* fm = get_filemanager();
+    fm->window = window;
+	yfw_cbreak();
+	yfw_noecho();
+	yfw_nonl();
+	yfw_intrflush(stdscr, FALSE);
+	yfw_keypad(stdscr, TRUE);
+	yfw_curs_set(FALSE);
+	yfw_timeout(1000);
+	return;
 }
 
-
-
-/* Clear the last line */
 void
 clearprompt(void)
 {
 	printmsg("");
+	return;
 }
 
-/* Print prompt on the last line */
+
 void
 printprompt(char *str)
 {
 	clearprompt();
-	printw(str);
+	yfw_printw(str);
+	return;
 }
 
 int xgetch(void)
 {
 	int c;
     filemanager_t* fm = get_filemanager();
-	c = getch();
+	c = yfw_getch();
 	if (c == -1)
 		fm->idle++;
 	else
@@ -439,37 +687,35 @@ readln(void)
 {
 	static char ln[LINE_MAX];
 
-	timeout(-1);
-	echo();
-	curs_set(TRUE);
+	yfw_timeout(-1);
+	yfw_echo();
+	yfw_curs_set(TRUE);
 	memset(ln, 0, sizeof(ln));
-	wgetnstr(stdscr, ln, sizeof(ln) - 1);
-	noecho();
-	curs_set(FALSE);
-	timeout(1000);
+	yfw_wgetnstr(stdscr, ln, sizeof(ln) - 1);
+	yfw_noecho();
+	yfw_curs_set(FALSE);
+	yfw_timeout(1000);
 	return ln[0] ? ln : NULL;
 }
 
 int
 canopendir(char *path)
 {
-	DIR *dirp;
+	yfw_dir_t *dirp;
 
-	dirp = opendir(path);
+	dirp = yfw_opendir(path);
 	if (dirp == NULL)
 		return 0;
-	closedir(dirp);
+	yfw_closedir(dirp);
 	return 1;
 }
 
 char *
 mkpath(char *dir, char *name, char *out, size_t n)
 {
-	/* Handle absolute path */
 	if (name[0] == '/') {
 		strlcpy(out, name, n);
 	} else {
-		/* Handle root case */
 		if (strcmp(dir, "/") == 0) {
 			strlcpy(out, "/", n);
 			strlcat(out, name, n);
@@ -489,7 +735,7 @@ get_delta(int i)
     filemanager_t* fm = get_filemanager();
     int ndents = fm->cols[i].ndents;
     int cur = fm->cols[i].cur;
-    int nlines = MIN(LINES - 4, ndents);
+    int nlines = MIN(YFW_LINES - 4, ndents);
 
     if (cur < nlines / 2) {
         delta = 0;
@@ -546,31 +792,29 @@ printentline(entry_t ent[MAX_COLS], int ind)
 {
   	char name[PATH_MAX];
     int totalcols = gettotalcols();
-	unsigned int maxlen = COLS/totalcols - strlen(CURSR) - 1;
+	unsigned int maxlen = YFW_COLS/totalcols - strlen(CURSR) - 1;
     int i = 0;
     filemanager_t* fm = get_filemanager();
     for (i=0;i<PATH_MAX;++i) name[i]=0;
     int j = 0;
     for (i =0;i<totalcols;++i) {
-        /* Copy name locally */
         char cm = 0;
 
         if (!ent[i].dummy) {
         strlcpy(name, ent[i].name, sizeof(name));
-            if (S_ISDIR(ent[i].mode)) {
+            if (YFW_S_ISDIR(ent[i].mode)) {
                 cm = '/';
-            } else if (S_ISLNK(ent[i].mode)) {
+            } else if (YFW_S_ISLNK(ent[i].mode)) {
                 cm = '@';
-            } else if (S_ISSOCK(ent[i].mode)) {
+            } else if (YFW_S_ISSOCK(ent[i].mode)) {
                 cm = '=';
-            } else if (S_ISFIFO(ent[i].mode)) {
+            } else if (YFW_S_ISFIFO(ent[i].mode)) {
                 cm = '|';
-            } else if (ent[i].mode & S_IXUSR) {
+            } else if (ent[i].mode & YFW_S_IXUSR) {
                 cm = '*';
             }
         }
 
-        /* No text wrapping in entries */
         if (strlen(name) > maxlen)
             name[maxlen] = '\0';
 
@@ -578,7 +822,7 @@ printentline(entry_t ent[MAX_COLS], int ind)
         char lformat[10]; for (j=0;j<10;++j) lformat[j]=0;
         char align = 0; (i % 2 == 1) ? (align = '+') : (align = '-');
 
-        sprintf(lformat, "%c%c%ds", '%', align, COLS/totalcols - 2);
+        sprintf(lformat, "%c%c%ds", '%', align, YFW_COLS/totalcols - 2);
 
         if (ent[i].dummy==0) {
             char* cursor;
@@ -595,38 +839,37 @@ printentline(entry_t ent[MAX_COLS], int ind)
                 sprintf(line , "%s%s%c ", cursor , name, cm);
 
 
-            if (ind+get_delta(i)==fm->cols[i].cur && i==fm->curcol) attron(A_STANDOUT);
+            if (ind+get_delta(i)==fm->cols[i].cur && i==fm->curcol) yfw_attron(A_STANDOUT);
 
             if ((strlen(line) >=maxlen) && (cm!=0) && (line[maxlen-2]) !=cm)
                 line[maxlen-1] = cm;
             line[maxlen]='\0';
-            printw(lformat, line);
+            yfw_printw(lformat, line);
         }
         else if (ent[i].dummy==1){
-            printw(lformat, " ");
+            yfw_printw(lformat, " ");
         }
-        attroff(A_STANDOUT);
+        yfw_attroff(A_STANDOUT);
         if (i==totalcols - 1) printw ("\n");
     }
 }
 
 int
 dentfill(char *path, entry_t **dents,
-	 int (*filter)(regex_t *, char *), regex_t *re)
+	 int (*filter)(yfw_regex_t_t *, char *), yfw_regex_t_t *re)
 {
 	char newpath[PATH_MAX];
 	size_t i = 0; for (i=0;i<PATH_MAX;++i) newpath[i]=0;
-	DIR *dirp;
-	struct dirent *dp;
-	struct stat sb;
+	yfw_dir_t *dirp;
+	yfw_dirent_t *dp;
+	yfw_stat_t sb;
 	int r, n = 0;
 
-	dirp = opendir(path);
+	dirp = yfw_opendir(path);
 	if (dirp == NULL)
 		return 0;
 
-	while ((dp = readdir(dirp)) != NULL) {
-		/* Skip self and parent */
+	while ((dp = yfw_readdir(dirp)) != NULL) {
 		if (strcmp(dp->d_name, ".") == 0 ||
 		    strcmp(dp->d_name, "..") == 0)
 			continue;
@@ -634,9 +877,9 @@ dentfill(char *path, entry_t **dents,
 			continue;
 		*dents = xrealloc(*dents, (n + 1) * sizeof(**dents));
 		strlcpy((*dents)[n].name, dp->d_name, sizeof((*dents)[n].name));
-		/* Get mode flags */
+
 		mkpath(path, dp->d_name, newpath, sizeof(newpath));
-		r = lstat(newpath, &sb);
+		r = yfw_lstat(newpath, &sb);
 		if (r == -1)
 			printerr(1, "lstat");
 		(*dents)[n].mode = sb.st_mode;
@@ -646,8 +889,7 @@ dentfill(char *path, entry_t **dents,
 		n++;
 	}
 
-	/* Should never be null */
-	r = closedir(dirp);
+	r = yfw_closedir(dirp);
 	if (r == -1)
 		printerr(1, "closedir");
 	return n;
@@ -659,7 +901,6 @@ dentfree(entry_t* dents)
 	free(dents);
 }
 
-/* Return the position of the matching entry or 0 otherwise */
 int
 dentfind(entry_t *dents, int n, char *cwd, char *path)
 {
@@ -681,15 +922,14 @@ dentfind(entry_t *dents, int n, char *cwd, char *path)
 int
 populate(char *path, char *oldpath, char *fltr,char coli)
 {
-	regex_t re;
+	yfw_regex_t_t re;
 	int r;
 
     filemanager_t* fm = get_filemanager();
-	/* Can fail when permissions change while browsing */
+
 	if (canopendir(path) == 0)
 		return -1;
 
-	/* Search filter */
 	r = setfilter(&re, fltr);
 	if (r != 0)
 		return -1;
@@ -705,11 +945,11 @@ populate(char *path, char *oldpath, char *fltr,char coli)
 
 	freefilter(&re);
 	if (fm->cols[coli].ndents == 0)
-		return 0; /* Empty result */
+		return 0;
 
 	qsort(fm->cols[coli].dents, fm->cols[coli].ndents, sizeof(*(fm->cols[coli].dents)), entrycmp);
 
-	/* Find cur from history */
+
 	fm->cols[coli].cur = dentfind(fm->cols[coli].dents, fm->cols[coli].ndents, path, oldpath);
 
 	return 0;
@@ -718,8 +958,8 @@ populate(char *path, char *oldpath, char *fltr,char coli)
 void
 redraw(filemanager_t* fm)
 {
-     if (LINES < 5) {erase(); return;}
-     if ((COLS/(fm->totalcols)<15) && (fm->totalcols!=0)) {erase(); return;}
+     if (YFW_LINES < 5) {yfw_erase(); return;}
+     if ((YFW_COLS/(fm->totalcols)<15) && (fm->totalcols!=0)) {yfw_erase(); return;}
 
 	char cwd[PATH_MAX], cwdresolved[PATH_MAX];
 	size_t ntcols;
@@ -732,12 +972,12 @@ redraw(filemanager_t* fm)
         if (fm->cols[i].ndents>maxndents)
             maxndents =fm->cols[i].ndents;
 
-	nlines = MIN(LINES - 4, maxndents);
+	nlines = MIN(YFW_LINES - 4, maxndents);
 
-	/* Clean screen */
-	erase();
 
-	/* Strip trailing slashes */
+	yfw_erase();
+
+
 	for (j=0;j<fm->totalcols;j++) {
 	for (i = strlen(fm->cols[j].path) - 1; i > 0; i--)
 		if (fm->cols[j].path[i] == '/')
@@ -752,16 +992,16 @@ redraw(filemanager_t* fm)
 	DPRINTF_D(cur_curcol);
 	DPRINTF_S(cur_path);
 
-	/* No text wrapping in cwd line */
-	ntcols = COLS;
+
+	ntcols = YFW_COLS;
     if (ntcols > PATH_MAX)
     	ntcols = PATH_MAX;
     strlcpy(cwd, cur_path, ntcols);
     cwd[ntcols - strlen(CWD) - 1] = '\0';
     realpath(cwd, cwdresolved);
 
-   	printw(CWD "%s\n\n", cwdresolved);
-	/* Print listing */
+   	yfw_printw(CWD "%s\n\n", cwdresolved);
+
 	odd = ISODD(nlines);
 	j=0;
     entry_t line[MAX_COLS];
@@ -804,7 +1044,7 @@ fm_addcol(filemanager_t* fm)
 {
     column_t* curcol = getcurrentcolumn(fm);
     column_t* cols = fm->cols;
-    if (COLS/(fm->totalcols+1) < 20) {  return 0; }
+    if (YFW_COLS/(fm->totalcols+1) < 20) {  return 0; }
     int i;
     if ((fm->totalcols  < MAX_COLS)) {
         if (curcol->ndents==0) {
@@ -929,7 +1169,7 @@ fm_sortcols(filemanager_t* fm)
         return 1;
     }
 
-    return 0;
+    return 1;
 }
 
 static void
@@ -991,7 +1231,7 @@ int
 fm_prev_dir(filemanager_t*fm, column_t* curcol)
 {
     char* ifilter = fm->ifilter;
-    /* There is no going back */
+
     if (strcmp(curcol->path, "/") == 0 ||
         strcmp(curcol->path, ".") == 0 ||
         strchr(curcol->path, '/') == NULL)
@@ -1001,10 +1241,10 @@ fm_prev_dir(filemanager_t*fm, column_t* curcol)
         printwarn();
         return 0;
     }
-    /* Save history */
+
     strlcpy(curcol->oldpath, curcol->path, sizeof(curcol->oldpath));
     strlcpy(curcol->path, dir, sizeof(curcol->path));
-    /* Reset filter */
+
     strlcpy(fm->fltr, ifilter, sizeof(fm->fltr));
     populate_current(fm);
     return 1;
@@ -1013,7 +1253,7 @@ fm_prev_dir(filemanager_t*fm, column_t* curcol)
 int
 fm_next_dir(filemanager_t* fm, column_t* curcol)
 {
-    /* Cannot descend in empty directories */
+
     if (fm->cols[fm->curcol].ndents == 0)
         return 0;
 
@@ -1021,38 +1261,38 @@ fm_next_dir(filemanager_t* fm, column_t* curcol)
     DPRINTF_S(curcol->newpath);
 
     int r, fd;
-    struct stat sb;
+    yfw_stat_t sb;
     char* bin, *env;
-    /* Get path info */
-    fd = open(curcol->newpath, O_RDONLY | O_NONBLOCK);
+
+    fd = yfw_open(curcol->newpath, YFW_O_RDONLY | YFW_O_NONBLOCK);
     if (fd == -1) {
         printwarn();
         return 0;
     }
-    r = fstat(fd, &sb);
+    r = yfw_fstat(fd, &sb);
     if (r == -1) {
         printwarn();
-        close(fd);
+        yfw_close(fd);
         return 0;
     }
-    close(fd);
+    yfw_close(fd);
     DPRINTF_U(sb.st_mode);
 
     int fl = 0;
-    switch (sb.st_mode & S_IFMT) {
-    case S_IFDIR:
+    switch (sb.st_mode & YFW_S_IFMT) {
+    case YFW_S_IFDIR:
 
         if (canopendir(curcol->newpath) == 0) {
             printwarn();
             break;
         }
         strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
-        /* Reset filter */
+
         strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr));
 
         populate_current(fm);
         fl = 1; break;
-    case S_IFREG:
+    case YFW_S_IFREG:
         bin = openwith(curcol->newpath);
         if (bin == NULL) {
             printmsg(user_strings[STR_ERROR_NO_ASSOC]);
@@ -1074,21 +1314,21 @@ fm_next_dir(filemanager_t* fm, column_t* curcol)
 int
 fm_fltr_nonblock(filemanager_t* fm, column_t* curcol)
 {
-    /* Read filter */
+
     printprompt(user_strings[STR_PROMPT_REGEX]);
     char* ifilter = fm->ifilter;
     char* tmp = readln();
     if (tmp == NULL)
         tmp = ifilter;
-    /* Check and report regex errors */
-    regex_t re;
+
+    yfw_regex_t_t re;
     int r = setfilter(&re, tmp);
     if (r != 0)
         return 0;
     freefilter(&re);
     strlcpy(fm->fltr, tmp, sizeof(fm->fltr));
     DPRINTF_S(fm->fltr);
-    /* Save current */
+
     if (curcol->ndents > 0)
         mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
 
@@ -1132,7 +1372,7 @@ int
 fm_pageup(column_t* curcol)
 {
     if (curcol->cur > 0)
-        curcol->cur -= MIN((LINES - 4) / 2, curcol->cur);
+        curcol->cur -= MIN((YFW_LINES - 4) / 2, curcol->cur);
     return 1;
 }
 
@@ -1140,7 +1380,7 @@ int
 fm_pagedown(column_t* curcol)
 {
     if (curcol->cur < curcol->ndents - 1)
-        curcol->cur += MIN((LINES - 4) / 2, curcol->ndents - 1 - curcol->cur);
+        curcol->cur += MIN((YFW_LINES - 4) / 2, curcol->ndents - 1 - curcol->cur);
     return 1;
 }
 
@@ -1161,7 +1401,7 @@ fm_end(column_t* curcol)
 int
 fm_cd(filemanager_t* fm, column_t* curcol)
 {
-    /* Read target dir */
+
     printprompt(user_strings[STR_PROMPT_CD]);
     char* tmp = readln();
     if (tmp == NULL) {
@@ -1174,7 +1414,7 @@ fm_cd(filemanager_t* fm, column_t* curcol)
         return 0;
     }
     strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
-    /* Reset filter */
+
     strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr))
     DPRINTF_S(curcol->path);
 
@@ -1195,7 +1435,7 @@ fm_fastdir(filemanager_t* fm, column_t* curcol, char key)
             return 0;
         }
         strlcpy(curcol->path, curcol->newpath, sizeof(curcol->path));
-        /* Reset filter */
+
         strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr))
         DPRINTF_S(path);
         populate_current(fm);
@@ -1206,7 +1446,7 @@ fm_fastdir(filemanager_t* fm, column_t* curcol, char key)
 int
 fm_cdhome(filemanager_t* fm, column_t* curcol)
 {
-    char* tmp = getenv("HOME");
+    char* tmp = yfw_getenv(used_env_vars[ENV_HOME]);
     if (tmp == NULL) {
         clearprompt();
         return 0;
@@ -1216,7 +1456,7 @@ fm_cdhome(filemanager_t* fm, column_t* curcol)
         return 0;
     }
     strlcpy(curcol->path, tmp, sizeof(curcol->path));
-    /* Reset filter */
+
     strlcpy(fm->fltr, fm->ifilter, sizeof(fm->fltr));
     DPRINTF_S(curcol->path);
 
@@ -1240,7 +1480,7 @@ int
 fm_togglemtime(filemanager_t* fm, column_t* curcol)
 {
     mtimeorder = !mtimeorder;
-    /* Save current */
+
     if (curcol->ndents > 0)
         mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
 
@@ -1252,7 +1492,7 @@ fm_togglemtime(filemanager_t* fm, column_t* curcol)
 int
 fm_forceredraw(filemanager_t* fm, column_t* curcol)
 {
-    /* Save current */
+
     if (curcol->ndents > 0)
         mkpath(curcol->path, getcurrentryname(fm), curcol->oldpath, sizeof(curcol->oldpath));
 
@@ -1284,7 +1524,7 @@ int
 fm_shell(filemanager_t* fm, column_t* curcol)
 {
     exitcurses();
-    spawn(xgetenv("SHELL", favourite_shell), NULL, curcol->path);
+    spawn(xgetenv(used_env_vars[ENV_SHELL], favourite_shell), NULL, curcol->path);
     initcurses(fm->totalcols);
     return 1;
 }
@@ -1486,9 +1726,9 @@ detect_resize(void)
 {
     static int x = 0;
     static int y = 0;
-    if ((COLS != x) || (LINES !=y)) {
-        x = COLS;
-        y = LINES;
+    if ((YFW_COLS != x) || (YFW_LINES !=y)) {
+        x = YFW_COLS;
+        y = YFW_LINES;
         return 1;
     }
     return 0;
@@ -1520,7 +1760,7 @@ browse(char *ipath[MAX_COLS], char *ifilter, int totalcols)
         }
         if (update_flag == NOTHING_CHANGES)
             update_flag = (update_state_t) detect_resize();
-		/* Screensaver */
+
 		if ((idletimeout != 0) && (fm->idle == idletimeout)) {
 			fm->idle = 0;
 			exitcurses();
@@ -1552,21 +1792,21 @@ main(int argc, char *argv[])
 	char *ipath[MAX_COLS];
 	char *ifilter;
 
-  	/* Confirm we are in a terminal */
-	if (!isatty(0) || !isatty(1)) {
+
+	if (!yfw_isatty(0) || !yfw_isatty(1)) {
 		fprintf(stderr, "%s", user_strings[STR_ERR_NOTATTY]);
 		exit(1);
 	}
 
-	if (getuid() == 0)
+	if (yfw_getuid() == 0)
 		showhidden = 1;
 	initfilter(showhidden, &ifilter);
 
     int c = 0; int totalcols= NCOLS;
-    while ((c = getopt (argc, argv, "c:e:uvh?")) != -1)
+    while ((c = yfw_getopt (argc, argv, "c:e:uvh?")) != -1)
     switch (c) {
          case 'c':
-             totalcols = atoi(optarg);
+             totalcols = atoi(YFW_OPTARG);
              if ((totalcols>MAX_COLS) || (totalcols<1)) {
                  fprintf(stderr, user_strings[STR_ERR_COLS_ARG_FAILED], MAX_COLS); exit(1);
              }
@@ -1583,8 +1823,8 @@ main(int argc, char *argv[])
             usage(argv[0]);
             break;
     }
-    argc -= optind;
-    argv += optind;
+    argc -= YFW_OPTIND;
+    argv += YFW_OPTIND;
 
 	signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, SIG_IGN);
@@ -1597,7 +1837,7 @@ main(int argc, char *argv[])
             }
         }
         else {
-            ipath[i] = getcwd(cwd, sizeof(cwd));
+            ipath[i] = yfw_getcwd(cwd, sizeof(cwd));
             if (ipath[i] == NULL)
                 ipath[i] = "/";
         }
@@ -1607,7 +1847,7 @@ main(int argc, char *argv[])
         }
     }
 
-	/* Set locale before curses setup */
+
 	setlocale(LC_ALL, "");
 	initcurses(totalcols);
 	browse(ipath, ifilter, totalcols);

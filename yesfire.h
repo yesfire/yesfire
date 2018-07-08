@@ -13,10 +13,9 @@ extern "C" {
 
 #include <unistd.h>
 #include <dirent.h>
-
 #include <fcntl.h>
-#include <libgen.h>
 
+#include <libgen.h>
 #include <regex.h>
 
 #include <errno.h>
@@ -44,11 +43,15 @@ extern "C" {
 
 #define LEN(x) (sizeof(x) / sizeof(*(x)))
 #undef MIN
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-#define ISODD(x) ((x) & 1)
-#define CONTROL(c) ((c) ^ 0x40)
-#define META(c) ((c) ^ 0x80)
+/* #define MIN(x, y) ((x) < (y) ? (x) : (y))
+Fun fact. It's possible to avoid branching at all in this newfaggot macro.
+Also A +- B ~ MAX(A,B), if A >> B i.e. 100000 +- 1 ~ 100000
+It's even possible to build 1 instruction subleq RISC processor with this lol. */
+#define BPL (sizeof(int)*8-1)
+#define MIN(x,y) (((x) & (((int)((x)-(y)))>>BPL)) + ((y) & ~(((int)((x)-(y)))>>BPL)))
+/* See: https://jjj.de/fxt/fxtbook.pdf */
 
+#define ISODD(x) ((x) & 1)
 #define SWAP(x,y) do \
    { unsigned char swap_temp[sizeof(x) == sizeof(y) ? (signed)sizeof(x) : -1]; \
      memcpy(swap_temp,&y,sizeof(x)); \
@@ -56,20 +59,63 @@ extern "C" {
      memcpy(&x,swap_temp,sizeof(x)); \
     } while(0)
 
+#define ANSWER 42
+
+#define CONTROL(c) ((c) ^ 0x40)
+#define META(c) ((c) ^ 0x80)
+
 #ifndef PATH_MAX
-#define PATH_MAX 256
+#define PATH_MAX 1024
 #endif
 #ifndef LINE_MAX
-#define LINE_MAX 128
+#define LINE_MAX 256
 #endif
+
+#define MAX_RECURSION_DEPTH 128
+
+#define YF_WRAP_CALL
+#define YF_WRAP_ID(x) yfw_##x##_t
+
+typedef regex_t YF_WRAP_ID(regex_t);
+typedef regmatch_t YF_WRAP_ID(regmatch_t);
+typedef pid_t YF_WRAP_ID(pid_t);
+typedef uid_t YF_WRAP_ID(uid_t);
+typedef mode_t YF_WRAP_ID(mode_t);
+typedef ssize_t YF_WRAP_ID(ssize_t);
+
+#define yfw_stat_t struct stat
+#define yfw_dirent_t struct dirent
+#define yfw_dir_t struct DIR
+#define yfw_window_t struct WINDOW
+
+#define YFW_REG_NOSUB REG_NOSUB
+#define YFW_REG_EXTENDED REG_EXTENDED
+#define YFW_REG_ICASE REG_ICASE
+
+#define YFW_S_ISDIR S_ISDIR
+#define YFW_S_ISSOCK S_ISSOCK
+#define YFW_S_ISFIFO S_ISFIFO
+#define YFW_S_ISLNK S_ISLNK
+
+#define YFW_S_IXUSR S_IXUSR
+#define YFW_S_IFDIR S_IFDIR
+#define YFW_S_IFREG S_IFREG
+#define YFW_S_IFMT S_IFMT
+#define YFW_O_RDONLY O_RDONLY
+#define YFW_O_NONBLOCK O_NONBLOCK
+
+#define YFW_LINES LINES
+#define YFW_COLS COLS
+
+#define YFW_OPTIND optind
+#define YFW_OPTARG optarg
 
 #define MAX_ASSOCS_RESERVE 10
 typedef struct {
-	char *regex; /* Regex to match on filename */
-	char *bin[MAX_ASSOCS_RESERVE];   /* Program */
+	char *regex;
+	char *bin[MAX_ASSOCS_RESERVE];
 }assoc_t;
 
-/* Supported actions */
 typedef enum  {
     SEL_NOACTION = 1,
 	SEL_QUIT,
@@ -150,16 +196,32 @@ typedef struct {
 }sysfileops_t;
 
 typedef struct {
-	int sym;         /* Key pressed */
-	action_t nm; /* Action */
+	int sym;
+	action_t nm;
 	stack_mode_action_t sm;
 	int bb;
 }yf_key_t;
 
+typedef enum {
+    NO_FLAG,
+    DISOWN_SILENTLY,
+    PIPE_TO_SHELL,
+    PIPE_TO_VIEWER,
+}spawn_flags_t;
+
 typedef struct {
     int key;
     char* bin;
+    spawn_flags_t pipe;
 }binbinding_t;
+
+typedef struct {
+    const char* bin;
+    const char* argv;
+    const char* new_dir;
+    spawn_flags_t flags;
+
+}fire_spawn_t; /* You are in a computer game, Max! */
 
 typedef enum {
     DEFAULT_FILE_OPS,
@@ -210,7 +272,7 @@ typedef enum {
     VISUAL_MODE,
 }stack_mode_state;
 
-#define MAX_COLS 32 /* Max number of columns */
+#define MAX_COLS 32
 #define MAX_STATUS_LINE 128
 typedef struct {
     column_t cols[MAX_COLS];
@@ -221,13 +283,20 @@ typedef struct {
 	char fltr[LINE_MAX];
 	char fastdir[PATH_MAX];
 
-    entry_t directory_stack;
-    entry_t files_stack;
+    entry_t* directory_stack;
+    uint32_t dsp, dsc;
+
+    entry_t* files_stack;
+    uint32_t fsp, fsc;
 
     char status_line[MAX_STATUS_LINE];
     global_ui_state_t mode;
 
     char* ifilter;
+
+    yfw_window_t *window;
+
+    int recursion_depth;
 }filemanager_t;
 
 
@@ -245,6 +314,12 @@ typedef enum {
     STR_ERR_NOTATTY,
     STR_ERR_COLS_ARG_FAILED
 }user_strings_list_t;
+
+typedef enum {
+    ENV_SHELL,
+    ENV_TERM,
+    ENV_HOME
+}env_vars_list_t;
 
 #ifdef __cplusplus
 }

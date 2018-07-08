@@ -21,7 +21,8 @@ Shameless suckless 2f30.org noice fork.
 3. Cyclic scrolling.
 4. Special STACK MODE for traditional file operations
    (mkdir, touch, rm, mv, cp) support.
-5. Renamed binary noice -> yesfire.
+5. Advanced file filtering system.
+6. Renamed binary noice -> yesfire.
 
     alias y=yesfire >> .zshrc
 

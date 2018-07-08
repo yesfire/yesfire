@@ -1,6 +1,6 @@
 Basically it's designed to do fine 3 things.
 
-1. Expose human readable big picture of file system with minimal costs.
+1. Expose human readable and filtered big picture of the file system with minimal costs.
 2. Provide sane stable and secure way to manually perfom
 traditional file operations.
 3. Quickly locate appropriate binary to use with a file
@@ -20,8 +20,3 @@ What about atomic copy from NFS BSD/zfs server in USA to FTP Win/ntfs
 server in China whith confirmation sent to Linux/ext4 terminal in Russia?
 See, none of this has a direct answer and I still can continue question
 it further. Shit is getting real.
-
-
-
-
-

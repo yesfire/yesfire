@@ -1,39 +1,65 @@
 NAME = "Yesfire"
 VERSION = 42.0 #Version number is not an Answer. It shows the best time to use it.
-URL = "http://github.com/yesfire/yesfire"
+URL = "https://github.com/yesfire/yesfire"
 DESCRIPTION = "Minimalistic yet powerful multicolumn file manager"
+SUCCESS = "Build completed successfully. Feuer Frei!"
 
-DISTFILES = yesfire.c yesfire.h\
+DISTFILES = yesfire.c yesfire.h config.h\
             yesfire.1 Makefile README LICENSE
 OBJ = yesfire.o
 BIN = yesfire
 
+CCOUTPUTFLAG = -o
 LDLIBS = -lcurses
 PREFIX = /usr/local
 MANPREFIX = $(PREFIX)/man
 
-all: $(BIN)
+MKDIR = mkdir -p
+CP = cp -f
+RM = rm -f
+TAR = tar -cf
+ZIP = gzip
+RMDIR = rm -rf
+ECHO = @echo
+
+BINDIR = /bin
+MANDIR = /man1
+
+TAREXT = .tar
+ZIPEXT = .gz
+MANEXT = .1
+
+DVERSION = -$(VERSION)
+DBIN = /$(BIN)
+
+all: $(BIN) report
 
 $(BIN): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $(OBJ) $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CFLAGS) $(CCOUTPUTFLAG) $@ $(OBJ) $(LDFLAGS) $(LDLIBS)
+
+report:
+	$(ECHO) $(NAME) $(VERSION)
+	$(ECHO) $(DESCRIPTION)
+	$(ECHO) $(URL)
+	$(ECHO) $(SUCCESS)
 
 install: all
-	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	cp -f $(BIN) $(DESTDIR)$(PREFIX)/bin
-	mkdir -p $(DESTDIR)$(MANPREFIX)/man1
-	cp -f $(BIN).1 $(DESTDIR)$(MANPREFIX)/man1
+	$(MKDIR) $(DESTDIR)$(PREFIX)$(BINDIR)
+	$(CP) $(BIN) $(DESTDIR)$(PREFIX)$(BINDIR)
+	$(MKDIR) $(DESTDIR)$(MANPREFIX)$(MANDIR)
+	$(CP) $(BIN)$(MANEXT) $(DESTDIR)$(MANPREFIX)$(MANDIR)
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
-	rm -f $(DESTDIR)$(MANPREFIX)/man1/$(BIN).1
+	$(RM) $(DESTDIR)$(PREFIX)$(BINDIR)$(DBIN)
+	$(RM) $(DESTDIR)$(MANPREFIX)$(MANDIR)$(DBIN)$(MANEXT)
 
 dist:
-	mkdir -p yesfire-$(VERSION)
-	cp $(DISTFILES) yesfire-$(VERSION)
-	tar -cf yesfire-$(VERSION).tar yesfire-$(VERSION)
-	gzip yesfire-$(VERSION).tar
-	rm -rf yesfire-$(VERSION)
+	$(MKDIR) $(BIN)$(DVERSION)
+	$(CM) $(DISTFILES) $(BIN)$(DVERSION)
+	$(TAR) $(BIN)$(DVERSION)$(TAREXT) $(DBIN)$(DVERSION)
+	$(ZIP) $(BIN)$(DVERSION)$(TAREXT)
+	$(RMDIR) $(BIN)$(DVERSION)
 
 clean:
-	rm -f $(BIN) $(OBJ) yesfire-$(VERSION).tar.gz
+	$(RM) $(BIN) $(OBJ) $(BIN)$(DVERSION)$(TAREXT)$(ZIPEXT)
 
