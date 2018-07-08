@@ -92,7 +92,6 @@ yfw_execlp(const char *file, const char *arg, ...)
     int i = 1;
     char* argv[MAX_ARGS];
     char* ap;
-    argv[0] = file;
 
     va_list argl;
     va_start(argl, arg);
@@ -101,8 +100,9 @@ yfw_execlp(const char *file, const char *arg, ...)
         argv[i++] = ap;
         if (ap == NULL) break;
     }
-    va_end(argv);
+    va_end(argl);
 
+    argv[0] = arg;
     return execvp(file, argv);
 };
 YF_WRAP_CALL yfw_pid_t_t
